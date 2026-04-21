@@ -87,6 +87,7 @@ export interface Project {
   cwd: string;
   repositoryIdentity?: RepositoryIdentity | null;
   defaultModelSelection: ModelSelection | null;
+  defaultPrBaseBranch?: string | null;
   createdAt?: string | undefined;
   updatedAt?: string | undefined;
   scripts: ProjectScript[];

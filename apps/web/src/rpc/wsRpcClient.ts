@@ -1,12 +1,31 @@
 import {
+  type CancelLinearIssueRunInput,
+  type CreateLinearAccountInput,
+  type DeleteLinearAccountInput,
   type GitActionProgressEvent,
   type GitRunStackedActionInput,
   type GitRunStackedActionResult,
   type GitStatusResult,
   type GitStatusStreamEvent,
+  type LinearAccount,
+  type LinearIssueRunJob,
+  type LinearProject,
+  type LinearProjectMapping,
+  type LinearTeam,
+  type LinearTeamReviewStateMapping,
   type LocalApi,
   ORCHESTRATION_WS_METHODS,
+  type ListLinearIssueRunsInput,
+  type ListLinearIssueRunsResult,
+  type ListLinearIssuesInput,
+  type ListLinearIssuesResult,
+  type ListLinearProjectsInput,
+  type ListLinearTeamsInput,
   type ServerSettingsPatch,
+  type StartLinearIssueRunInput,
+  type UpdateLinearAccountInput,
+  type UpsertLinearProjectMappingsInput,
+  type UpsertLinearTeamReviewStateMappingsInput,
   WS_METHODS,
 } from "@t3tools/contracts";
 import { applyGitStatusStreamEvent } from "@t3tools/shared/git";
@@ -111,6 +130,26 @@ export interface WsRpcClient {
     readonly subscribeConfig: RpcStreamMethod<typeof WS_METHODS.subscribeServerConfig>;
     readonly subscribeLifecycle: RpcStreamMethod<typeof WS_METHODS.subscribeServerLifecycle>;
     readonly subscribeAuthAccess: RpcStreamMethod<typeof WS_METHODS.subscribeAuthAccess>;
+    readonly listLinearAccounts: () => Promise<LinearAccount[]>;
+    readonly createLinearAccount: (input: CreateLinearAccountInput) => Promise<LinearAccount>;
+    readonly updateLinearAccount: (input: UpdateLinearAccountInput) => Promise<LinearAccount>;
+    readonly deleteLinearAccount: (input: DeleteLinearAccountInput) => Promise<void>;
+    readonly listLinearTeams: (input: ListLinearTeamsInput) => Promise<LinearTeam[]>;
+    readonly listLinearProjects: (input: ListLinearProjectsInput) => Promise<LinearProject[]>;
+    readonly listLinearMappings: () => Promise<LinearProjectMapping[]>;
+    readonly upsertLinearMappings: (
+      input: UpsertLinearProjectMappingsInput,
+    ) => Promise<LinearProjectMapping[]>;
+    readonly listLinearTeamReviewStateMappings: () => Promise<LinearTeamReviewStateMapping[]>;
+    readonly upsertLinearTeamReviewStateMappings: (
+      input: UpsertLinearTeamReviewStateMappingsInput,
+    ) => Promise<LinearTeamReviewStateMapping[]>;
+    readonly listLinearIssues: (input: ListLinearIssuesInput) => Promise<ListLinearIssuesResult>;
+    readonly startLinearIssueRun: (input: StartLinearIssueRunInput) => Promise<LinearIssueRunJob>;
+    readonly listLinearIssueRuns: (
+      input: ListLinearIssueRunsInput,
+    ) => Promise<ListLinearIssueRunsResult>;
+    readonly cancelLinearIssueRun: (input: CancelLinearIssueRunInput) => Promise<LinearIssueRunJob>;
   };
   readonly orchestration: {
     readonly dispatchCommand: RpcUnaryMethod<typeof ORCHESTRATION_WS_METHODS.dispatchCommand>;
@@ -231,6 +270,50 @@ export function createWsRpcClient(transport: WsTransport): WsRpcClient {
           listener,
           options,
         ),
+      listLinearAccounts: () =>
+        transport
+          .request((client) => client[WS_METHODS.linearListAccounts]({}))
+          .then((accounts) => Array.from(accounts)),
+      createLinearAccount: (input) =>
+        transport.request((client) => client[WS_METHODS.linearCreateAccount](input)),
+      updateLinearAccount: (input) =>
+        transport.request((client) => client[WS_METHODS.linearUpdateAccount](input)),
+      deleteLinearAccount: (input) =>
+        transport
+          .request((client) => client[WS_METHODS.linearDeleteAccount](input))
+          .then(() => undefined),
+      listLinearTeams: (input) =>
+        transport
+          .request((client) => client[WS_METHODS.linearListTeams](input))
+          .then((teams) => Array.from(teams)),
+      listLinearProjects: (input) =>
+        transport
+          .request((client) => client[WS_METHODS.linearListProjects](input))
+          .then((projects) => Array.from(projects)),
+      listLinearMappings: () =>
+        transport
+          .request((client) => client[WS_METHODS.linearListMappings]({}))
+          .then((mappings) => Array.from(mappings)),
+      upsertLinearMappings: (input) =>
+        transport
+          .request((client) => client[WS_METHODS.linearUpsertMappings](input))
+          .then((mappings) => Array.from(mappings)),
+      listLinearTeamReviewStateMappings: () =>
+        transport
+          .request((client) => client[WS_METHODS.linearListTeamReviewStateMappings]({}))
+          .then((mappings) => Array.from(mappings)),
+      upsertLinearTeamReviewStateMappings: (input) =>
+        transport
+          .request((client) => client[WS_METHODS.linearUpsertTeamReviewStateMappings](input))
+          .then((mappings) => Array.from(mappings)),
+      listLinearIssues: (input) =>
+        transport.request((client) => client[WS_METHODS.linearListIssues](input)),
+      startLinearIssueRun: (input) =>
+        transport.request((client) => client[WS_METHODS.linearStartIssueRun](input)),
+      listLinearIssueRuns: (input) =>
+        transport.request((client) => client[WS_METHODS.linearListIssueRuns](input)),
+      cancelLinearIssueRun: (input) =>
+        transport.request((client) => client[WS_METHODS.linearCancelIssueRun](input)),
     },
     orchestration: {
       dispatchCommand: (input) =>

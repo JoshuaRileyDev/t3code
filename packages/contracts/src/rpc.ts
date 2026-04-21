@@ -76,6 +76,28 @@ import {
   ServerUpsertKeybindingResult,
 } from "./server.ts";
 import { ServerSettings, ServerSettingsError, ServerSettingsPatch } from "./settings.ts";
+import {
+  CancelLinearIssueRunInput,
+  CreateLinearAccountInput,
+  DeleteLinearAccountInput,
+  LinearAccount,
+  LinearIntegrationError,
+  LinearIssueRunJob,
+  LinearProject,
+  LinearProjectMapping,
+  LinearTeam,
+  LinearTeamReviewStateMapping,
+  ListLinearIssueRunsInput,
+  ListLinearIssueRunsResult,
+  ListLinearIssuesInput,
+  ListLinearIssuesResult,
+  ListLinearProjectsInput,
+  ListLinearTeamsInput,
+  StartLinearIssueRunInput,
+  UpdateLinearAccountInput,
+  UpsertLinearProjectMappingsInput,
+  UpsertLinearTeamReviewStateMappingsInput,
+} from "./linear.ts";
 
 export const WS_METHODS = {
   // Project registry methods
@@ -118,6 +140,20 @@ export const WS_METHODS = {
   serverUpsertKeybinding: "server.upsertKeybinding",
   serverGetSettings: "server.getSettings",
   serverUpdateSettings: "server.updateSettings",
+  linearListAccounts: "linear.listAccounts",
+  linearCreateAccount: "linear.createAccount",
+  linearUpdateAccount: "linear.updateAccount",
+  linearDeleteAccount: "linear.deleteAccount",
+  linearListTeams: "linear.listTeams",
+  linearListProjects: "linear.listProjects",
+  linearListMappings: "linear.listMappings",
+  linearUpsertMappings: "linear.upsertMappings",
+  linearListTeamReviewStateMappings: "linear.listTeamReviewStateMappings",
+  linearUpsertTeamReviewStateMappings: "linear.upsertTeamReviewStateMappings",
+  linearListIssues: "linear.listIssues",
+  linearStartIssueRun: "linear.startIssueRun",
+  linearListIssueRuns: "linear.listIssueRuns",
+  linearCancelIssueRun: "linear.cancelIssueRun",
 
   // Streaming subscriptions
   subscribeGitStatus: "subscribeGitStatus",
@@ -154,6 +190,96 @@ export const WsServerUpdateSettingsRpc = Rpc.make(WS_METHODS.serverUpdateSetting
   payload: Schema.Struct({ patch: ServerSettingsPatch }),
   success: ServerSettings,
   error: ServerSettingsError,
+});
+
+export const WsLinearListAccountsRpc = Rpc.make(WS_METHODS.linearListAccounts, {
+  payload: Schema.Struct({}),
+  success: Schema.Array(LinearAccount),
+  error: LinearIntegrationError,
+});
+
+export const WsLinearCreateAccountRpc = Rpc.make(WS_METHODS.linearCreateAccount, {
+  payload: CreateLinearAccountInput,
+  success: LinearAccount,
+  error: LinearIntegrationError,
+});
+
+export const WsLinearUpdateAccountRpc = Rpc.make(WS_METHODS.linearUpdateAccount, {
+  payload: UpdateLinearAccountInput,
+  success: LinearAccount,
+  error: LinearIntegrationError,
+});
+
+export const WsLinearDeleteAccountRpc = Rpc.make(WS_METHODS.linearDeleteAccount, {
+  payload: DeleteLinearAccountInput,
+  success: Schema.Struct({}),
+  error: LinearIntegrationError,
+});
+
+export const WsLinearListTeamsRpc = Rpc.make(WS_METHODS.linearListTeams, {
+  payload: ListLinearTeamsInput,
+  success: Schema.Array(LinearTeam),
+  error: LinearIntegrationError,
+});
+
+export const WsLinearListProjectsRpc = Rpc.make(WS_METHODS.linearListProjects, {
+  payload: ListLinearProjectsInput,
+  success: Schema.Array(LinearProject),
+  error: LinearIntegrationError,
+});
+
+export const WsLinearListMappingsRpc = Rpc.make(WS_METHODS.linearListMappings, {
+  payload: Schema.Struct({}),
+  success: Schema.Array(LinearProjectMapping),
+  error: LinearIntegrationError,
+});
+
+export const WsLinearUpsertMappingsRpc = Rpc.make(WS_METHODS.linearUpsertMappings, {
+  payload: UpsertLinearProjectMappingsInput,
+  success: Schema.Array(LinearProjectMapping),
+  error: LinearIntegrationError,
+});
+
+export const WsLinearListTeamReviewStateMappingsRpc = Rpc.make(
+  WS_METHODS.linearListTeamReviewStateMappings,
+  {
+    payload: Schema.Struct({}),
+    success: Schema.Array(LinearTeamReviewStateMapping),
+    error: LinearIntegrationError,
+  },
+);
+
+export const WsLinearUpsertTeamReviewStateMappingsRpc = Rpc.make(
+  WS_METHODS.linearUpsertTeamReviewStateMappings,
+  {
+    payload: UpsertLinearTeamReviewStateMappingsInput,
+    success: Schema.Array(LinearTeamReviewStateMapping),
+    error: LinearIntegrationError,
+  },
+);
+
+export const WsLinearListIssuesRpc = Rpc.make(WS_METHODS.linearListIssues, {
+  payload: ListLinearIssuesInput,
+  success: ListLinearIssuesResult,
+  error: LinearIntegrationError,
+});
+
+export const WsLinearStartIssueRunRpc = Rpc.make(WS_METHODS.linearStartIssueRun, {
+  payload: StartLinearIssueRunInput,
+  success: LinearIssueRunJob,
+  error: LinearIntegrationError,
+});
+
+export const WsLinearListIssueRunsRpc = Rpc.make(WS_METHODS.linearListIssueRuns, {
+  payload: ListLinearIssueRunsInput,
+  success: ListLinearIssueRunsResult,
+  error: LinearIntegrationError,
+});
+
+export const WsLinearCancelIssueRunRpc = Rpc.make(WS_METHODS.linearCancelIssueRun, {
+  payload: CancelLinearIssueRunInput,
+  success: LinearIssueRunJob,
+  error: LinearIntegrationError,
 });
 
 export const WsProjectsSearchEntriesRpc = Rpc.make(WS_METHODS.projectsSearchEntries, {
@@ -361,6 +487,20 @@ export const WsRpcGroup = RpcGroup.make(
   WsServerUpsertKeybindingRpc,
   WsServerGetSettingsRpc,
   WsServerUpdateSettingsRpc,
+  WsLinearListAccountsRpc,
+  WsLinearCreateAccountRpc,
+  WsLinearUpdateAccountRpc,
+  WsLinearDeleteAccountRpc,
+  WsLinearListTeamsRpc,
+  WsLinearListProjectsRpc,
+  WsLinearListMappingsRpc,
+  WsLinearUpsertMappingsRpc,
+  WsLinearListTeamReviewStateMappingsRpc,
+  WsLinearUpsertTeamReviewStateMappingsRpc,
+  WsLinearListIssuesRpc,
+  WsLinearStartIssueRunRpc,
+  WsLinearListIssueRunsRpc,
+  WsLinearCancelIssueRunRpc,
   WsProjectsSearchEntriesRpc,
   WsProjectsWriteFileRpc,
   WsShellOpenInEditorRpc,

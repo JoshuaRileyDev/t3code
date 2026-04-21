@@ -20,6 +20,7 @@ import {
   FilesystemBrowseError,
   ThreadId,
   type TerminalEvent,
+  LinearIntegrationError,
   WS_METHODS,
   WsRpcGroup,
 } from "@t3tools/contracts";
@@ -54,6 +55,10 @@ import { ProjectSetupScriptRunner } from "./project/Services/ProjectSetupScriptR
 import { RepositoryIdentityResolver } from "./project/Services/RepositoryIdentityResolver.ts";
 import { ServerEnvironment } from "./environment/Services/ServerEnvironment.ts";
 import { ServerAuth } from "./auth/Services/ServerAuth.ts";
+import {
+  LinearIntegrationService,
+  type LinearIntegrationServiceShape,
+} from "./linear/Services/LinearIntegrationService.ts";
 import {
   BootstrapCredentialService,
   type BootstrapCredentialChange,
@@ -155,6 +160,20 @@ const makeWsRpcLayer = (currentSessionId: AuthSessionId) =>
       const sessions = yield* SessionCredentialService;
       const serverCommandId = (tag: string) =>
         CommandId.make(`server:${tag}:${crypto.randomUUID()}`);
+      const withLinearIntegrationService = <A>(
+        run: (service: LinearIntegrationServiceShape) => Effect.Effect<A, LinearIntegrationError>,
+      ): Effect.Effect<A, LinearIntegrationError> =>
+        Effect.serviceOption(LinearIntegrationService).pipe(
+          Effect.flatMap((serviceOption) =>
+            Option.isSome(serviceOption)
+              ? run(serviceOption.value)
+              : Effect.fail(
+                  new LinearIntegrationError({
+                    message: "Linear integration service is not available.",
+                  }),
+                ),
+          ),
+        );
 
       const loadAuthAccessSnapshot = () =>
         Effect.all({
@@ -772,6 +791,120 @@ const makeWsRpcLayer = (currentSessionId: AuthSessionId) =>
           observeRpcEffect(WS_METHODS.serverUpdateSettings, serverSettings.updateSettings(patch), {
             "rpc.aggregate": "server",
           }),
+        [WS_METHODS.linearListAccounts]: (_input) =>
+          observeRpcEffect(
+            WS_METHODS.linearListAccounts,
+            withLinearIntegrationService((service) => service.listAccounts()),
+            {
+              "rpc.aggregate": "linear",
+            },
+          ),
+        [WS_METHODS.linearCreateAccount]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.linearCreateAccount,
+            withLinearIntegrationService((service) => service.createAccount(input)),
+            {
+              "rpc.aggregate": "linear",
+            },
+          ),
+        [WS_METHODS.linearUpdateAccount]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.linearUpdateAccount,
+            withLinearIntegrationService((service) => service.updateAccount(input)),
+            {
+              "rpc.aggregate": "linear",
+            },
+          ),
+        [WS_METHODS.linearDeleteAccount]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.linearDeleteAccount,
+            withLinearIntegrationService((service) => service.deleteAccount(input)).pipe(
+              Effect.as({}),
+            ),
+            {
+              "rpc.aggregate": "linear",
+            },
+          ),
+        [WS_METHODS.linearListTeams]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.linearListTeams,
+            withLinearIntegrationService((service) => service.listTeams(input)),
+            {
+              "rpc.aggregate": "linear",
+            },
+          ),
+        [WS_METHODS.linearListProjects]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.linearListProjects,
+            withLinearIntegrationService((service) => service.listProjects(input)),
+            {
+              "rpc.aggregate": "linear",
+            },
+          ),
+        [WS_METHODS.linearListMappings]: (_input) =>
+          observeRpcEffect(
+            WS_METHODS.linearListMappings,
+            withLinearIntegrationService((service) => service.listMappings()),
+            {
+              "rpc.aggregate": "linear",
+            },
+          ),
+        [WS_METHODS.linearUpsertMappings]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.linearUpsertMappings,
+            withLinearIntegrationService((service) => service.upsertMappings(input)),
+            {
+              "rpc.aggregate": "linear",
+            },
+          ),
+        [WS_METHODS.linearListTeamReviewStateMappings]: (_input) =>
+          observeRpcEffect(
+            WS_METHODS.linearListTeamReviewStateMappings,
+            withLinearIntegrationService((service) => service.listTeamReviewStateMappings()),
+            {
+              "rpc.aggregate": "linear",
+            },
+          ),
+        [WS_METHODS.linearUpsertTeamReviewStateMappings]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.linearUpsertTeamReviewStateMappings,
+            withLinearIntegrationService((service) => service.upsertTeamReviewStateMappings(input)),
+            {
+              "rpc.aggregate": "linear",
+            },
+          ),
+        [WS_METHODS.linearListIssues]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.linearListIssues,
+            withLinearIntegrationService((service) => service.listIssues(input)),
+            {
+              "rpc.aggregate": "linear",
+            },
+          ),
+        [WS_METHODS.linearStartIssueRun]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.linearStartIssueRun,
+            withLinearIntegrationService((service) => service.startIssueRun(input)),
+            {
+              "rpc.aggregate": "linear",
+            },
+          ),
+        [WS_METHODS.linearListIssueRuns]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.linearListIssueRuns,
+            withLinearIntegrationService((service) => service.listIssueRuns(input)),
+            {
+              "rpc.aggregate": "linear",
+            },
+          ),
+        [WS_METHODS.linearCancelIssueRun]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.linearCancelIssueRun,
+            withLinearIntegrationService((service) => service.cancelIssueRun(input)),
+            {
+              "rpc.aggregate": "linear",
+            },
+          ),
         [WS_METHODS.projectsSearchEntries]: (input) =>
           observeRpcEffect(
             WS_METHODS.projectsSearchEntries,

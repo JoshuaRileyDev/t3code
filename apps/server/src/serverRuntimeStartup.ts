@@ -33,6 +33,7 @@ import { ServerEnvironment } from "./environment/Services/ServerEnvironment.ts";
 import { AnalyticsService } from "./telemetry/Services/AnalyticsService.ts";
 import { ServerAuth } from "./auth/Services/ServerAuth.ts";
 import { ProviderSessionReaper } from "./provider/Services/ProviderSessionReaper.ts";
+import { LinearIssueRunReactor } from "./linear/Services/LinearIssueRunReactor.ts";
 import {
   formatHeadlessServeOutput,
   formatHostForUrl,
@@ -330,6 +331,10 @@ export const makeServerRuntimeStartup = Effect.gen(function* () {
       Effect.gen(function* () {
         yield* orchestrationReactor.start().pipe(Scope.provide(reactorScope));
         yield* providerSessionReaper.start().pipe(Scope.provide(reactorScope));
+        const linearIssueRunReactor = yield* Effect.serviceOption(LinearIssueRunReactor);
+        if (Option.isSome(linearIssueRunReactor)) {
+          yield* linearIssueRunReactor.value.start().pipe(Scope.provide(reactorScope));
+        }
       }),
     );
 

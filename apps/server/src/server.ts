@@ -67,6 +67,9 @@ import {
 import { ServerSecretStoreLive } from "./auth/Layers/ServerSecretStore.ts";
 import { ServerAuthLive } from "./auth/Layers/ServerAuth.ts";
 import { OrchestrationLayerLive } from "./orchestration/runtimeLayer.ts";
+import { LinearApiClientLive } from "./linear/Layers/LinearApiClient.ts";
+import { LinearIntegrationServiceLive } from "./linear/Layers/LinearIntegrationService.ts";
+import { LinearIssueRunReactorLive } from "./linear/Layers/LinearIssueRunReactor.ts";
 import {
   clearPersistedServerRuntimeState,
   makePersistedServerRuntimeState,
@@ -224,6 +227,19 @@ const ProviderRuntimeLayerLive = ProviderSessionReaperLive.pipe(
   Layer.provideMerge(OrchestrationLayerLive),
 );
 
+const LinearIntegrationLayerLive = LinearIntegrationServiceLive.pipe(
+  Layer.provide(LinearApiClientLive),
+  Layer.provide(ServerSecretStoreLive),
+  Layer.provideMerge(PersistenceLayerLive),
+  Layer.provide(GitManagerLayerLive),
+  Layer.provide(OrchestrationLayerLive),
+);
+
+const LinearIssueRunReactorLayerLive = LinearIssueRunReactorLive.pipe(
+  Layer.provide(LinearIntegrationLayerLive),
+  Layer.provide(OrchestrationLayerLive),
+);
+
 const RuntimeDependenciesLive = ReactorLayerLive.pipe(
   // Core Services
   Layer.provideMerge(CheckpointingLayerLive),
@@ -239,6 +255,8 @@ const RuntimeDependenciesLive = ReactorLayerLive.pipe(
   Layer.provideMerge(RepositoryIdentityResolverLive),
   Layer.provideMerge(ServerEnvironmentLive),
   Layer.provideMerge(AuthLayerLive),
+  Layer.provideMerge(LinearIntegrationLayerLive),
+  Layer.provideMerge(LinearIssueRunReactorLayerLive),
 
   // Misc.
   Layer.provideMerge(AnalyticsServiceLayerLive),
@@ -247,8 +265,9 @@ const RuntimeDependenciesLive = ReactorLayerLive.pipe(
   Layer.provide(NetService.layer),
 );
 
-const RuntimeServicesLive = ServerRuntimeStartupLive.pipe(
-  Layer.provideMerge(RuntimeDependenciesLive),
+const RuntimeServicesLive = Layer.mergeAll(
+  RuntimeDependenciesLive,
+  ServerRuntimeStartupLive.pipe(Layer.provide(RuntimeDependenciesLive)),
 );
 
 export const makeRoutesLayer = Layer.mergeAll(
@@ -317,6 +336,7 @@ export const makeServerLayer = Layer.unwrap(
 
     return serverApplicationLayer.pipe(
       Layer.provideMerge(RuntimeServicesLive),
+      Layer.provideMerge(RuntimeDependenciesLive),
       Layer.provideMerge(HttpServerLive),
       Layer.provide(ObservabilityLive),
       Layer.provideMerge(FetchHttpClient.layer),

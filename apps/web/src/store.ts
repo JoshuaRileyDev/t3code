@@ -218,6 +218,7 @@ function mapProject(
     defaultModelSelection: project.defaultModelSelection
       ? normalizeModelSelection(project.defaultModelSelection)
       : null,
+    defaultPrBaseBranch: project.defaultPrBaseBranch ?? null,
     createdAt: project.createdAt,
     updatedAt: project.updatedAt,
     scripts: mapProjectScripts(project.scripts),
@@ -1153,6 +1154,7 @@ function applyEnvironmentOrchestrationEvent(
           workspaceRoot: event.payload.workspaceRoot,
           repositoryIdentity: event.payload.repositoryIdentity ?? null,
           defaultModelSelection: event.payload.defaultModelSelection,
+          defaultPrBaseBranch: event.payload.defaultPrBaseBranch ?? null,
           scripts: event.payload.scripts,
           createdAt: event.payload.createdAt,
           updatedAt: event.payload.updatedAt,
@@ -1214,6 +1216,9 @@ function applyEnvironmentOrchestrationEvent(
                 ? normalizeModelSelection(event.payload.defaultModelSelection)
                 : null,
             }
+          : {}),
+        ...(event.payload.defaultPrBaseBranch !== undefined
+          ? { defaultPrBaseBranch: event.payload.defaultPrBaseBranch }
           : {}),
         ...(event.payload.scripts !== undefined
           ? { scripts: mapProjectScripts(event.payload.scripts) }

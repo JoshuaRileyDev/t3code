@@ -4,6 +4,7 @@ import {
   ChevronRightIcon,
   CloudIcon,
   GitPullRequestIcon,
+  KanbanSquareIcon,
   PlusIcon,
   SearchIcon,
   SettingsIcon,
@@ -2440,6 +2441,8 @@ interface SidebarProjectsContentProps {
   suppressProjectClickForContextMenuRef: React.RefObject<boolean>;
   attachProjectListAutoAnimateRef: (node: HTMLElement | null) => void;
   projectsLength: number;
+  isOnLinearIssues: boolean;
+  openLinearIssues: () => void;
 }
 
 const SidebarProjectsContent = memo(function SidebarProjectsContent(
@@ -2480,6 +2483,8 @@ const SidebarProjectsContent = memo(function SidebarProjectsContent(
     suppressProjectClickForContextMenuRef,
     attachProjectListAutoAnimateRef,
     projectsLength,
+    isOnLinearIssues,
+    openLinearIssues,
   } = props;
 
   const handleProjectSortOrderChange = useCallback(
@@ -2505,6 +2510,17 @@ const SidebarProjectsContent = memo(function SidebarProjectsContent(
     <SidebarContent className="gap-0">
       <SidebarGroup className="px-2 pt-2 pb-1">
         <SidebarMenu>
+          <SidebarMenuItem>
+            <SidebarMenuButton
+              size="sm"
+              isActive={isOnLinearIssues}
+              className="gap-2 px-2 py-1.5 text-muted-foreground/70 hover:bg-accent hover:text-foreground"
+              onClick={openLinearIssues}
+            >
+              <KanbanSquareIcon className="size-3.5" />
+              <span className="flex-1 truncate text-left text-xs">Linear Issues</span>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
           <SidebarMenuItem>
             <CommandDialogTrigger
               render={
@@ -2674,6 +2690,7 @@ export default function Sidebar() {
   const navigate = useNavigate();
   const pathname = useLocation({ select: (loc) => loc.pathname });
   const isOnSettings = pathname.startsWith("/settings");
+  const isOnLinearIssues = pathname === "/linear-issues";
   const sidebarThreadSortOrder = useSettings((s) => s.sidebarThreadSortOrder);
   const sidebarProjectSortOrder = useSettings((s) => s.sidebarProjectSortOrder);
   const sidebarProjectGroupingMode = useSettings((s) => s.sidebarProjectGroupingMode);
@@ -3281,6 +3298,10 @@ export default function Sidebar() {
     });
   }, []);
 
+  const openLinearIssues = useCallback(() => {
+    void navigate({ to: "/linear-issues" });
+  }, [navigate]);
+
   return (
     <>
       <SidebarChromeHeader isElectron={isElectron} />
@@ -3324,6 +3345,8 @@ export default function Sidebar() {
             suppressProjectClickForContextMenuRef={suppressProjectClickForContextMenuRef}
             attachProjectListAutoAnimateRef={attachProjectListAutoAnimateRef}
             projectsLength={projects.length}
+            isOnLinearIssues={isOnLinearIssues}
+            openLinearIssues={openLinearIssues}
           />
 
           <SidebarSeparator />

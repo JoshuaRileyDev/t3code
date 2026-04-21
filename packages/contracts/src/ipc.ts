@@ -54,6 +54,27 @@ import type {
 import type { EnvironmentId } from "./baseSchemas.ts";
 import { EditorId } from "./editor.ts";
 import { ServerSettings, type ClientSettings, type ServerSettingsPatch } from "./settings.ts";
+import type {
+  CancelLinearIssueRunInput,
+  CreateLinearAccountInput,
+  DeleteLinearAccountInput,
+  LinearAccount,
+  LinearIssueRunJob,
+  LinearProject,
+  LinearProjectMapping,
+  LinearTeam,
+  LinearTeamReviewStateMapping,
+  ListLinearIssueRunsInput,
+  ListLinearIssueRunsResult,
+  ListLinearIssuesInput,
+  ListLinearIssuesResult,
+  ListLinearProjectsInput,
+  ListLinearTeamsInput,
+  StartLinearIssueRunInput,
+  UpdateLinearAccountInput,
+  UpsertLinearProjectMappingsInput,
+  UpsertLinearTeamReviewStateMappingsInput,
+} from "./linear.ts";
 
 export interface ContextMenuItem<T extends string = string> {
   id: T;
@@ -219,6 +240,24 @@ export interface LocalApi {
     upsertKeybinding: (input: ServerUpsertKeybindingInput) => Promise<ServerUpsertKeybindingResult>;
     getSettings: () => Promise<ServerSettings>;
     updateSettings: (patch: ServerSettingsPatch) => Promise<ServerSettings>;
+    listLinearAccounts: () => Promise<LinearAccount[]>;
+    createLinearAccount: (input: CreateLinearAccountInput) => Promise<LinearAccount>;
+    updateLinearAccount: (input: UpdateLinearAccountInput) => Promise<LinearAccount>;
+    deleteLinearAccount: (input: DeleteLinearAccountInput) => Promise<void>;
+    listLinearTeams: (input: ListLinearTeamsInput) => Promise<LinearTeam[]>;
+    listLinearProjects: (input: ListLinearProjectsInput) => Promise<LinearProject[]>;
+    listLinearMappings: () => Promise<LinearProjectMapping[]>;
+    upsertLinearMappings: (
+      input: UpsertLinearProjectMappingsInput,
+    ) => Promise<LinearProjectMapping[]>;
+    listLinearTeamReviewStateMappings: () => Promise<LinearTeamReviewStateMapping[]>;
+    upsertLinearTeamReviewStateMappings: (
+      input: UpsertLinearTeamReviewStateMappingsInput,
+    ) => Promise<LinearTeamReviewStateMapping[]>;
+    listLinearIssues: (input: ListLinearIssuesInput) => Promise<ListLinearIssuesResult>;
+    startLinearIssueRun: (input: StartLinearIssueRunInput) => Promise<LinearIssueRunJob>;
+    listLinearIssueRuns: (input: ListLinearIssueRunsInput) => Promise<ListLinearIssueRunsResult>;
+    cancelLinearIssueRun: (input: CancelLinearIssueRunInput) => Promise<LinearIssueRunJob>;
   };
 }
 
