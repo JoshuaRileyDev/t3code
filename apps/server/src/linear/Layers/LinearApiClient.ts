@@ -114,6 +114,53 @@ function decodeIssue(node: Record<string, unknown>): LinearIssue | null {
   };
 }
 
+function decodeWorkflowStates(
+  data: { workflowStates?: { nodes?: Array<Record<string, unknown>> } } | undefined,
+): ReadonlyArray<LinearWorkflowState> {
+  return (data?.workflowStates?.nodes ?? []).flatMap((node) => {
+    const id = decodeString(node.id, "").trim();
+    const name = decodeString(node.name, "").trim();
+    const type = decodeString(node.type, "").trim();
+    const teamId = decodeString((node.team as Record<string, unknown> | undefined)?.id, "").trim();
+    if (!id || !name || !type || !teamId) return [];
+    return [
+      {
+        id: id as never,
+        name: name as never,
+        type: type as never,
+        teamId: teamId as never,
+      },
+    ];
+  });
+}
+
+function decodeProjects(
+  data: { projects?: { nodes?: Array<Record<string, unknown>> } } | undefined,
+): ReadonlyArray<LinearProject> {
+  return (data?.projects?.nodes ?? []).flatMap((node) => {
+    const id = decodeString(node.id, "").trim();
+    const name = decodeString(node.name, "").trim();
+    const key = decodeNullableString(node.key);
+    const teams =
+      ((node.teams as Record<string, unknown> | undefined)?.nodes as
+        | Array<Record<string, unknown>>
+        | undefined) ?? [];
+    const firstTeam = teams[0];
+    const teamId = decodeString(firstTeam?.id, "").trim();
+    const teamName = decodeString(firstTeam?.name, "").trim();
+    if (!id || !name || !teamId || !teamName) return [];
+    return [
+      {
+        id: id as never,
+        name: name as never,
+        key: key as never,
+        teamId: teamId as never,
+        teamName: teamName as never,
+      },
+    ];
+  });
+}
+
 const makeLinearApiClient = Effect.gen(function* () {
   const getWorkspaceInfo: LinearApiClientShape["getWorkspaceInfo"] = (apiKey) =>
     postGraphql<{ viewer?: { id?: unknown; organization?: { id?: unknown; name?: unknown } } }>(
@@ -152,102 +199,130 @@ const makeLinearApiClient = Effect.gen(function* () {
   const listWorkflowStates: LinearApiClientShape["listWorkflowStates"] = (apiKey, input) =>
     postGraphql<{ workflowStates?: { nodes?: Array<Record<string, unknown>> } }>(
       apiKey,
-      `query WorkflowStates($teamIds: [String!]) {
-        workflowStates(filter: { team: { id: { in: $teamIds } } }) {
-          nodes { id name type team { id } }
-        }
-      }`,
-      { teamIds: input.teamIds && input.teamIds.length > 0 ? input.teamIds : undefined },
-    ).pipe(
-      Effect.map(
-        (data): ReadonlyArray<LinearWorkflowState> =>
-          (data.workflowStates?.nodes ?? []).flatMap((node) => {
-            const id = decodeString(node.id, "").trim();
-            const name = decodeString(node.name, "").trim();
-            const type = decodeString(node.type, "").trim();
-            const teamId = decodeString(
-              (node.team as Record<string, unknown> | undefined)?.id,
-              "",
-            ).trim();
-            if (!id || !name || !type || !teamId) return [];
-            return [
-              {
-                id: id as never,
-                name: name as never,
-                type: type as never,
-                teamId: teamId as never,
-              },
-            ];
-          }),
-      ),
-    );
+      input.teamIds && input.teamIds.length > 0
+        ? `query WorkflowStates($teamIds: [String!]) {
+            workflowStates(filter: { team: { id: { in: $teamIds } } }) {
+              nodes { id name type team { id } }
+            }
+          }`
+        : `query WorkflowStates {
+            workflowStates {
+              nodes { id name type team { id } }
+            }
+          }`,
+      input.teamIds && input.teamIds.length > 0 ? { teamIds: input.teamIds } : undefined,
+    ).pipe(Effect.map((data): ReadonlyArray<LinearWorkflowState> => decodeWorkflowStates(data)));
 
   const listProjects: LinearApiClientShape["listProjects"] = (apiKey, input) =>
     postGraphql<{ projects?: { nodes?: Array<Record<string, unknown>> } }>(
       apiKey,
-      `query Projects($teamIds: [String!]) {
-        projects(filter: { teams: { some: { id: { in: $teamIds } } } }) {
-          nodes { id name key teams { nodes { id name } } }
-        }
-      }`,
-      { teamIds: input.teamIds && input.teamIds.length > 0 ? input.teamIds : undefined },
-    ).pipe(
-      Effect.map(
-        (data): ReadonlyArray<LinearProject> =>
-          (data.projects?.nodes ?? []).flatMap((node) => {
-            const id = decodeString(node.id, "").trim();
-            const name = decodeString(node.name, "").trim();
-            const key = decodeNullableString(node.key);
-            const teams =
-              ((node.teams as Record<string, unknown> | undefined)?.nodes as
-                | Array<Record<string, unknown>>
-                | undefined) ?? [];
-            const firstTeam = teams[0];
-            const teamId = decodeString(firstTeam?.id, "").trim();
-            const teamName = decodeString(firstTeam?.name, "").trim();
-            if (!id || !name || !teamId || !teamName) return [];
-            return [
-              {
-                id: id as never,
-                name: name as never,
-                key: key as never,
-                teamId: teamId as never,
-                teamName: teamName as never,
-              },
-            ];
-          }),
-      ),
-    );
+      input.teamIds && input.teamIds.length > 0
+        ? `query Projects($teamIds: [String!]) {
+            projects(filter: { teams: { some: { id: { in: $teamIds } } } }) {
+              nodes { id name key teams { nodes { id name } } }
+            }
+          }`
+        : `query Projects {
+            projects {
+              nodes { id name key teams { nodes { id name } } }
+            }
+          }`,
+      input.teamIds && input.teamIds.length > 0 ? { teamIds: input.teamIds } : undefined,
+    ).pipe(Effect.map((data): ReadonlyArray<LinearProject> => decodeProjects(data)));
 
   const listIssues: LinearApiClientShape["listIssues"] = (apiKey, input) =>
     postGraphql<{ issues?: { nodes?: Array<Record<string, unknown>> } }>(
       apiKey,
-      `query Issues($teamIds: [String!], $projectIds: [String!]) {
-        issues(
-          filter: {
-            team: { id: { in: $teamIds } }
-            project: { id: { in: $projectIds } }
+      input.teamIds && input.teamIds.length > 0 && input.projectIds && input.projectIds.length > 0
+        ? `query Issues($teamIds: [String!], $projectIds: [String!]) {
+            issues(
+              filter: {
+                team: { id: { in: $teamIds } }
+                project: { id: { in: $projectIds } }
+              }
+            ) {
+              nodes {
+                id
+                identifier
+                title
+                description
+                url
+                priority
+                updatedAt
+                state { id name }
+                team { id name }
+                project { id name }
+                assignee { name }
+              }
+            }
+          }`
+        : input.projectIds && input.projectIds.length > 0
+          ? `query Issues($projectIds: [String!]) {
+              issues(filter: { project: { id: { in: $projectIds } } }) {
+                nodes {
+                  id
+                  identifier
+                  title
+                  description
+                  url
+                  priority
+                  updatedAt
+                  state { id name }
+                  team { id name }
+                  project { id name }
+                  assignee { name }
+                }
+              }
+            }`
+          : input.teamIds && input.teamIds.length > 0
+            ? `query Issues($teamIds: [String!]) {
+                issues(filter: { team: { id: { in: $teamIds } } }) {
+                  nodes {
+                    id
+                    identifier
+                    title
+                    description
+                    url
+                    priority
+                    updatedAt
+                    state { id name }
+                    team { id name }
+                    project { id name }
+                    assignee { name }
+                  }
+                }
+              }`
+            : `query Issues {
+                issues {
+                  nodes {
+                    id
+                    identifier
+                    title
+                    description
+                    url
+                    priority
+                    updatedAt
+                    state { id name }
+                    team { id name }
+                    project { id name }
+                    assignee { name }
+                  }
+                }
+              }`,
+      input.teamIds && input.teamIds.length > 0 && input.projectIds && input.projectIds.length > 0
+        ? {
+            teamIds: input.teamIds,
+            projectIds: input.projectIds,
           }
-        ) {
-          nodes {
-            id
-            identifier
-            title
-            description
-            url
-            priority
-            updatedAt
-            state { id name }
-            team { id name }
-            project { id name }
-            assignee { name }
-          }
-        }
-      }`,
-      {
-        teamIds: input.teamIds && input.teamIds.length > 0 ? input.teamIds : undefined,
-        projectIds: input.projectIds && input.projectIds.length > 0 ? input.projectIds : undefined,
-      },
+        : input.projectIds && input.projectIds.length > 0
+          ? {
+              projectIds: input.projectIds,
+            }
+          : input.teamIds && input.teamIds.length > 0
+            ? {
+                teamIds: input.teamIds,
+              }
+            : undefined,
     ).pipe(
       Effect.map(
         (data): ReadonlyArray<LinearIssue> =>

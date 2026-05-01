@@ -1,5 +1,6 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
+import { useShallow } from "zustand/react/shallow";
 
 import { ensureLocalApi } from "../localApi";
 import { selectProjectsAcrossEnvironments, useStore } from "../store";
@@ -17,7 +18,7 @@ function statusLabel(status: string) {
 
 function LinearIssuesPage() {
   const localApi = ensureLocalApi();
-  const projects = useStore(selectProjectsAcrossEnvironments);
+  const projects = useStore(useShallow(selectProjectsAcrossEnvironments));
   const [issues, setIssues] = useState<
     Awaited<ReturnType<ReturnType<typeof ensureLocalApi>["server"]["listLinearIssues"]>>["issues"]
   >([]);

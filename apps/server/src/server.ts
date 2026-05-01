@@ -227,17 +227,21 @@ const ProviderRuntimeLayerLive = ProviderSessionReaperLive.pipe(
   Layer.provideMerge(OrchestrationLayerLive),
 );
 
+const OrchestrationWithPersistenceLayerLive = OrchestrationLayerLive.pipe(
+  Layer.provideMerge(RepositoryIdentityResolverLive),
+  Layer.provideMerge(PersistenceLayerLive),
+);
+
 const LinearIntegrationLayerLive = LinearIntegrationServiceLive.pipe(
   Layer.provide(LinearApiClientLive),
   Layer.provide(ServerSecretStoreLive),
-  Layer.provideMerge(PersistenceLayerLive),
   Layer.provide(GitManagerLayerLive),
-  Layer.provide(OrchestrationLayerLive),
+  Layer.provide(OrchestrationWithPersistenceLayerLive),
 );
 
 const LinearIssueRunReactorLayerLive = LinearIssueRunReactorLive.pipe(
   Layer.provide(LinearIntegrationLayerLive),
-  Layer.provide(OrchestrationLayerLive),
+  Layer.provide(OrchestrationWithPersistenceLayerLive),
 );
 
 const RuntimeDependenciesLive = ReactorLayerLive.pipe(
@@ -255,8 +259,6 @@ const RuntimeDependenciesLive = ReactorLayerLive.pipe(
   Layer.provideMerge(RepositoryIdentityResolverLive),
   Layer.provideMerge(ServerEnvironmentLive),
   Layer.provideMerge(AuthLayerLive),
-  Layer.provideMerge(LinearIntegrationLayerLive),
-  Layer.provideMerge(LinearIssueRunReactorLayerLive),
 
   // Misc.
   Layer.provideMerge(AnalyticsServiceLayerLive),
@@ -266,9 +268,10 @@ const RuntimeDependenciesLive = ReactorLayerLive.pipe(
 );
 
 const RuntimeServicesLive = Layer.mergeAll(
-  RuntimeDependenciesLive,
-  ServerRuntimeStartupLive.pipe(Layer.provide(RuntimeDependenciesLive)),
-);
+  ServerRuntimeStartupLive,
+  LinearIntegrationLayerLive,
+  LinearIssueRunReactorLayerLive,
+).pipe(Layer.provideMerge(RuntimeDependenciesLive));
 
 export const makeRoutesLayer = Layer.mergeAll(
   authBearerBootstrapRouteLayer,
@@ -336,7 +339,6 @@ export const makeServerLayer = Layer.unwrap(
 
     return serverApplicationLayer.pipe(
       Layer.provideMerge(RuntimeServicesLive),
-      Layer.provideMerge(RuntimeDependenciesLive),
       Layer.provideMerge(HttpServerLive),
       Layer.provide(ObservabilityLive),
       Layer.provideMerge(FetchHttpClient.layer),

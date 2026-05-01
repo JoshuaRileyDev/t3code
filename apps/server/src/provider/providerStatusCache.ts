@@ -1,4 +1,5 @@
 import * as nodePath from "node:path";
+import * as Crypto from "node:crypto";
 import { type ServerProvider, ServerProvider as ServerProviderSchema } from "@t3tools/contracts";
 import { Cause, Effect, FileSystem, Path, Schema } from "effect";
 
@@ -97,7 +98,7 @@ export const writeProviderStatusCache = (input: {
   readonly filePath: string;
   readonly provider: ServerProvider;
 }) => {
-  const tempPath = `${input.filePath}.${process.pid}.${Date.now()}.tmp`;
+  const tempPath = `${input.filePath}.${process.pid}.${Date.now()}.${Crypto.randomUUID()}.tmp`;
   return Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;

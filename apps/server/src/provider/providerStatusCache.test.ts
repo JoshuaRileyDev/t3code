@@ -73,6 +73,53 @@ it.layer(NodeServices.layer)("providerStatusCache", (it) => {
     }),
   );
 
+  it.effect("handles concurrent writes even when timestamps match", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const tempDir = yield* fs.makeTempDirectoryScoped({ prefix: "t3-provider-cache-" });
+      const cachePath = resolveProviderStatusCachePath({
+        cacheDir: tempDir,
+        provider: "claudeAgent",
+      });
+      const providerA = makeProvider("claudeAgent", {
+        checkedAt: "2026-04-11T00:00:00.000Z",
+        status: "ready",
+      });
+      const providerB = makeProvider("claudeAgent", {
+        checkedAt: "2026-04-11T00:00:01.000Z",
+        status: "warning",
+        auth: { status: "unknown" },
+      });
+
+      const originalNow = Date.now;
+      Date.now = () => 1_776_766_021_827;
+      yield* Effect.addFinalizer(() =>
+        Effect.sync(() => {
+          Date.now = originalNow;
+        }),
+      );
+
+      yield* Effect.all(
+        [
+          writeProviderStatusCache({
+            filePath: cachePath,
+            provider: providerA,
+          }),
+          writeProviderStatusCache({
+            filePath: cachePath,
+            provider: providerB,
+          }),
+        ],
+        { concurrency: "unbounded" },
+      );
+
+      const cached = yield* readProviderStatusCache(cachePath);
+      const isProviderA = JSON.stringify(cached) === JSON.stringify(providerA);
+      const isProviderB = JSON.stringify(cached) === JSON.stringify(providerB);
+      assert.strictEqual(isProviderA || isProviderB, true);
+    }),
+  );
+
   it("hydrates cached provider status while preserving current settings-derived models", () => {
     const cachedCodex = makeProvider("codex", {
       checkedAt: "2026-04-10T12:00:00.000Z",

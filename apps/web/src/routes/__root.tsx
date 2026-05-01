@@ -1,4 +1,5 @@
 import { type ServerLifecycleWelcomePayload } from "@t3tools/contracts";
+import { type UnifiedSettings } from "@t3tools/contracts/settings";
 import { scopedProjectKey, scopeProjectRef } from "@t3tools/client-runtime";
 import {
   Outlet,
@@ -67,6 +68,11 @@ export const Route = createRootRouteWithContext<{
   head: () => ({
     meta: [{ name: "title", content: APP_DISPLAY_NAME }],
   }),
+});
+
+const selectProjectGroupingSettings = (settings: UnifiedSettings) => ({
+  sidebarProjectGroupingMode: settings.sidebarProjectGroupingMode,
+  sidebarProjectGroupingOverrides: settings.sidebarProjectGroupingOverrides,
 });
 
 function RootRouteView() {
@@ -209,10 +215,7 @@ function EventRouter() {
   const setActiveEnvironmentId = useStore((store) => store.setActiveEnvironmentId);
   const navigate = useNavigate();
   const pathname = useLocation({ select: (loc) => loc.pathname });
-  const projectGroupingSettings = useSettings((settings) => ({
-    sidebarProjectGroupingMode: settings.sidebarProjectGroupingMode,
-    sidebarProjectGroupingOverrides: settings.sidebarProjectGroupingOverrides,
-  }));
+  const projectGroupingSettings = useSettings(selectProjectGroupingSettings);
   const readPathname = useEffectEvent(() => pathname);
   const handledBootstrapThreadIdRef = useRef<string | null>(null);
   const seenServerConfigUpdateIdRef = useRef(getServerConfigUpdatedNotification()?.id ?? 0);

@@ -46,6 +46,8 @@
     "fmt:check": "oxfmt --check",
     "build:contracts": "turbo run build --filter=@t3tools/contracts",
     "dist:desktop:artifact": "node scripts/build-desktop-artifact.ts",
+    "dist:desktop:app": "node scripts/build-desktop-artifact.ts --platform mac --target dir --output-dir release/desktop-app",
+    "dist:desktop:install": "node scripts/install-desktop-app.ts",
     "dist:desktop:dmg": "node scripts/build-desktop-artifact.ts --platform mac --target dmg",
     "dist:desktop:dmg:arm64": "node scripts/build-desktop-artifact.ts --platform mac --target dmg --arch arm64",
     "dist:desktop:dmg:x64": "node scripts/build-desktop-artifact.ts --platform mac --target dmg --arch x64",
