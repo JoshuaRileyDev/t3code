@@ -1,116 +1,150 @@
-# T3 Architecture Guard
+# TypeScript Architecture Guard
 
 ## Purpose
 
-Use this skill to keep a monorepo aligned with the T3 Code architecture style:
+Use this skill to enforce a high-discipline architecture and maintainability standard in TypeScript projects (including Next.js, Node services, monorepos, and full-stack apps).
 
-- performance- and reliability-first behavior
-- explicit package boundaries and protocol contracts
-- deterministic behavior under load, reconnects, partial streams, and restarts
-- maintainable structure with low duplication
+Core outcomes:
 
-This skill is reusable across projects that want this same shape (server + web + contracts + shared runtime utilities).
+- predictable behavior under failure and load
+- clear module and layer boundaries
+- minimal duplication with reusable abstractions
+- contracts-first evolution across app boundaries
+- consistently high code quality over time
 
 ## When To Use
 
-Trigger this skill when a request involves any of:
+Apply this skill whenever work includes:
 
-- adding/changing provider/session/runtime orchestration logic
-- changing websocket or RPC event flow
-- introducing new domain events or shared protocol schemas
-- adding shared runtime helpers used by both server and web
-- large refactors where architectural consistency matters
+- new features crossing API or package boundaries
+- refactors with architectural impact
+- state management, orchestration, or async workflow changes
+- schema/data contract updates
+- broad cleanup aimed at maintainability and consistency
 
-## Architecture Contract
+## Non-Negotiable Principles
 
-### 1) Package boundaries are strict
+1. Correctness over convenience.
+2. Reliability over cleverness.
+3. Explicit boundaries over implicit coupling.
+4. Reuse over duplication.
+5. Small composable modules over oversized files.
 
-- `apps/server`: runtime adapters, orchestration, persistence, transport, provider lifecycle.
-- `apps/web`: view state, rendering, client projections, local UX logic.
-- `packages/contracts`: schemas + types only. No runtime side effects.
-- `packages/shared`: reusable runtime utilities with explicit subpath exports.
+## Recommended Project Shape
 
-Never move server-only runtime behavior into contracts.
-Never add web-specific UI behavior into shared runtime helpers.
+Adapt names as needed, but preserve separation of concerns:
 
-### 2) Contracts-first changes
+- `apps/*` or `services/*`: runtime entrypoints (web, api, workers)
+- `packages/contracts` or `lib/contracts`: shared schemas + types only
+- `packages/shared` or `lib/shared`: framework-agnostic runtime utilities
+- `packages/ui` (optional): shared presentational UI primitives
 
-For new cross-boundary behavior:
+Rules:
 
-1. define/update schema in `packages/contracts`
-2. implement server behavior that emits/consumes it
-3. project/use it in web
-4. add tests at the boundary where failure would be hardest to debug
+- Keep contracts/schema packages side-effect free.
+- Avoid importing runtime server logic into client bundles.
+- Keep transport code (HTTP/RPC/WebSocket) separate from core domain logic.
 
-### 3) Deterministic orchestration
+## Architecture Rules
 
-- prefer idempotent commands and stable identifiers
-- preserve event ordering guarantees when transforming streams
-- handle reconnect/resume explicitly
-- avoid hidden implicit state transitions
+### 1) Contracts-first development
 
-### 4) Layered runtime composition
+When behavior crosses boundaries:
 
-Follow the existing Effect layering style:
+1. define/update schema and types first
+2. update producer (server/API)
+3. update consumer (web/client)
+4. add boundary-focused tests
 
-- keep Services as contracts
-- keep Layers as concrete wiring
-- compose dependencies in one place (server runtime composition)
-- avoid circular runtime dependencies by extracting shared domain logic
+### 2) Layering and dependency direction
 
-### 5) Reliability over convenience
+Keep dependency flow one-way:
 
-When tradeoffs appear:
+- domain does not depend on transport/UI
+- application services orchestrate domain + infra
+- infrastructure adapts external systems (db, APIs, queues)
 
-- pick correctness over smaller local diffs
-- add guardrails for partial failure paths
-- fail explicitly with typed domain errors
-- avoid best-effort behavior that can silently desync client/server state
+Never let UI components or request handlers embed core business rules directly.
+
+### 3) Error handling discipline
+
+- model expected failures with typed/domain errors
+- avoid swallowing errors
+- keep retry/timeout behavior explicit
+- include enough context in errors/logs for production debugging
+
+### 4) State and async consistency
+
+- use idempotent operations where feasible
+- protect ordering-sensitive flows
+- make reconnect/retry/restart semantics explicit
+- avoid hidden shared mutable state
+
+### 5) File/module quality bar
+
+- each module has one clear responsibility
+- prefer pure functions for core transformations
+- extract repeated logic once it appears in 2+ places
+- keep public APIs narrow and intentional
 
 ## Implementation Workflow
 
-1. Read affected package boundaries first.
-2. Search for existing shared logic before adding new local logic.
-3. Extract duplicate behavior into shared modules when used in 2+ places.
-4. Keep transport concerns separate from domain logic.
-5. Add/adjust tests nearest the changed invariants.
-6. Run required quality gates.
+1. Understand current boundaries and invariants.
+2. Identify existing shared logic before adding new code.
+3. Design minimal contract changes (if needed).
+4. Implement by layer (domain -> service -> transport/UI).
+5. Add or update tests around invariants and failure paths.
+6. Run formatting, linting, type checks, and tests.
 
-## Quality Gates (Required)
+## Naming and Organization Patterns
 
-From repo root, all of the following must pass:
+- Use consistent folder naming (`domain`, `services`, `infra`, `routes`, `components`, `hooks`).
+- Prefer explicit module names (`UserSessionStore`, `ProjectRepository`) over generic ones (`utils`, `helpers2`).
+- Keep test files adjacent to implementation when practical.
 
-```bash
-bun fmt
-bun lint
-bun typecheck
-```
+## Testing Strategy
 
-Test command policy:
+- unit tests for pure logic and edge cases
+- integration tests for boundary interactions
+- e2e tests for critical user/business flows
+- add regression tests for every production bug fix
 
-- Do not run `bun test`.
-- Use `bun run test` when tests are needed.
+Focus tests on invariants and failure behavior, not implementation details.
 
-## PR / Change Checklist
+## Code Review Checklist
 
-- boundaries respected across server/web/contracts/shared
-- no duplicated business logic introduced
-- event/command/schema changes versioned coherently
-- failure/retry/reconnect behavior accounted for
-- quality gates pass
+- boundaries preserved
+- no duplicated business logic
+- contracts and consumers updated together
+- failure/retry paths handled explicitly
+- observability/logging added where operationally important
+- tests cover changed invariants
+- formatting/lint/typecheck/tests pass
 
 ## Anti-Patterns To Reject
 
-- runtime code in contracts package
-- ad-hoc websocket payloads that bypass contracts
-- hidden cross-package imports that violate boundaries
-- fixing bugs only in UI projection when source-of-truth is server domain state
-- copy-paste orchestration logic instead of shared extraction
+- ad-hoc payloads that bypass typed contracts
+- cross-layer imports that invert dependencies
+- large “god files” handling unrelated responsibilities
+- fix-only-in-UI for bugs rooted in domain/server behavior
+- copy-paste business logic instead of shared extraction
+- silent catch blocks that hide failures
 
 ## Reuse Notes
 
-To use this on another project:
+To reuse in any project:
 
-1. copy this folder into that repo’s `.agents/skills/`
-2. adapt package names while keeping the same boundaries
-3. keep the contracts-first + reliability-first workflow unchanged
+1. copy this folder into `.agents/skills/`
+2. rename paths/examples to match that repo
+3. keep principles and checklists unchanged
+
+## Optional Next.js Mapping
+
+If using Next.js App Router:
+
+- route handlers/server actions: transport/application edge
+- `lib/domain/*`: domain logic
+- `lib/services/*`: orchestration and use-cases
+- `lib/infra/*`: db/external integrations
+- `lib/contracts/*`: zod/effect/schema contracts
+- UI components remain thin and declarative
