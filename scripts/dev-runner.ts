@@ -417,6 +417,15 @@ export function runDevRunnerWithInput(input: DevRunnerCliInput) {
       devUrl: input.devUrl,
     });
 
+    if (input.mode !== "dev:web" && input.port !== undefined) {
+      const explicitPortAvailable = yield* defaultCheckPortAvailability(input.port);
+      if (!explicitPortAvailable) {
+        return yield* new DevRunnerError({
+          message: `Configured T3CODE_PORT=${input.port} is already in use. Stop the existing process or unset T3CODE_PORT/T3CODE_PORT_OFFSET.`,
+        });
+      }
+    }
+
     const selectionSuffix =
       serverOffset !== offset || webOffset !== offset
         ? ` selectedOffset(server=${serverOffset},web=${webOffset})`
