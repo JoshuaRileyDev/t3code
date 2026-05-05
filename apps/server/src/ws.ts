@@ -58,6 +58,7 @@ import { ServerEnvironment } from "./environment/Services/ServerEnvironment.ts";
 import { ServerAuth } from "./auth/Services/ServerAuth.ts";
 import { AutomationEngine } from "./automation/Services/AutomationEngine.ts";
 import { AutomationEngineLive } from "./automation/Layers/AutomationEngine.ts";
+import { AutomationQueueLive } from "./automation/Layers/AutomationQueue.ts";
 import {
   BootstrapCredentialService,
   type BootstrapCredentialChange,
@@ -1222,6 +1223,7 @@ export const websocketRpcRouteLayer = Layer.unwrap(
             makeWsRpcLayer(session.sessionId).pipe(
               Layer.provideMerge(RpcSerialization.layerJson),
               Layer.provideMerge(AutomationEngineLive),
+              Layer.provideMerge(AutomationQueueLive),
             ),
           ),
         );

@@ -3,9 +3,11 @@ import type {
   AutomationBoardSnapshot,
   AutomationCreateIssueInput,
   AutomationIssue,
+  AutomationIssueStatus,
   AutomationIssueCommandInput,
   AutomationMoveIssueInput,
   AutomationQueueConfig,
+  AutomationRun,
   AutomationUpdateIssueInput,
   AutomationUpdateQueueConfigInput,
 } from "@t3tools/contracts";
@@ -40,6 +42,13 @@ export interface AutomationEngineShape {
   readonly updateQueueConfig: (
     input: AutomationUpdateQueueConfigInput,
   ) => Effect.Effect<AutomationQueueConfig, AutomationEngineError>;
+  readonly upsertRun: (run: AutomationRun) => Effect.Effect<AutomationRun, AutomationEngineError>;
+  readonly setIssueStatusInternal: (input: {
+    readonly issueId: string;
+    readonly status: AutomationIssueStatus;
+    readonly activeRunId?: string | null;
+    readonly failureReason?: string | null;
+  }) => Effect.Effect<AutomationIssue, AutomationEngineError>;
   readonly subscribeBoard: Stream.Stream<AutomationBoardEvent, never, never>;
 }
 
