@@ -14,6 +14,7 @@ import { runProcess } from "../../processRunner.ts";
 import { AutomationEngineError } from "../Errors.ts";
 import {
   AutomationRunWorker,
+  type AutomationRunResult,
   type AutomationRunWorkerShape,
 } from "../Services/AutomationRunWorker.ts";
 
@@ -71,6 +72,26 @@ const makeAutomationRunWorker = Effect.gen(function* () {
           message: "Automation quality checks failed",
           cause,
         }),
+    });
+
+  const completePostTurn = (input: {
+    readonly issueTitle: string;
+    readonly runId: string;
+    readonly worktreePath: string;
+  }) =>
+    Effect.gen(function* () {
+      yield* runChecks(input.worktreePath);
+      const gitResult = yield* gitManager.runStackedAction({
+        actionId: `automation:${input.runId}`,
+        cwd: input.worktreePath,
+        action: "commit_push_pr",
+        commitMessage: `feat(automation): ${input.issueTitle}`,
+        featureBranch: false,
+      });
+      return {
+        summary: "Automation run completed and PR prepared",
+        ...(gitResult.pr.url ? { pullRequestUrl: gitResult.pr.url } : {}),
+      } as const;
     });
 
   const waitForTurnCompletion = (threadId: string) =>
@@ -173,23 +194,19 @@ const makeAutomationRunWorker = Effect.gen(function* () {
 
       yield* orchestrationEngine.dispatch(turnStart);
       yield* waitForTurnCompletion(threadId);
-      yield* runChecks(worktree.worktree.path);
-
-      const gitResult = yield* gitManager.runStackedAction({
-        actionId: `automation:${run.id}`,
-        cwd: worktree.worktree.path,
-        action: "commit_push_pr",
-        commitMessage: `feat(automation): ${issue.title}`,
-        featureBranch: false,
+      const postTurn = yield* completePostTurn({
+        issueTitle: issue.title,
+        runId: run.id,
+        worktreePath: worktree.worktree.path,
       });
 
       return {
         status: "succeeded" as const,
-        summary: "Automation run completed and PR prepared",
+        summary: postTurn.summary,
         threadId,
         branch: worktree.worktree.branch,
         worktreePath: worktree.worktree.path,
-        ...(gitResult.pr.url ? { pullRequestUrl: gitResult.pr.url } : {}),
+        ...("pullRequestUrl" in postTurn ? { pullRequestUrl: postTurn.pullRequestUrl } : {}),
       };
     }).pipe(
       Effect.mapError(
@@ -201,8 +218,42 @@ const makeAutomationRunWorker = Effect.gen(function* () {
       ),
     );
 
+  const resumeRecoveredRun: AutomationRunWorkerShape["resumeRecoveredRun"] = ({ issue, run }) =>
+    Effect.gen(function* () {
+      if (!run.threadId || !run.worktreePath) {
+        return {
+          status: "failed" as const,
+          summary: "Recovery could not continue",
+          errorMessage: "Missing thread/worktree metadata for recovery.",
+        } satisfies AutomationRunResult;
+      }
+      yield* waitForTurnCompletion(run.threadId);
+      const postTurn = yield* completePostTurn({
+        issueTitle: issue.title,
+        runId: run.id,
+        worktreePath: run.worktreePath,
+      });
+      return {
+        status: "succeeded" as const,
+        summary: postTurn.summary,
+        threadId: run.threadId,
+        ...(run.branch ? { branch: run.branch } : {}),
+        worktreePath: run.worktreePath,
+        ...("pullRequestUrl" in postTurn ? { pullRequestUrl: postTurn.pullRequestUrl } : {}),
+      } satisfies AutomationRunResult;
+    }).pipe(
+      Effect.mapError(
+        (cause) =>
+          new AutomationEngineError({
+            message: cause instanceof Error ? cause.message : "Automation recovery failed",
+            cause,
+          }),
+      ),
+    );
+
   return {
     executeRun,
+    resumeRecoveredRun,
   } satisfies AutomationRunWorkerShape;
 });
 
