@@ -219,6 +219,36 @@ function createMockEnvironmentApi(input: {
       subscribeThread: (() => () =>
         undefined) as EnvironmentApi["orchestration"]["subscribeThread"],
     },
+    automation: {
+      createIssue: (() => {
+        throw new Error("Not implemented in browser test.");
+      }) as EnvironmentApi["automation"]["createIssue"],
+      updateIssue: (() => {
+        throw new Error("Not implemented in browser test.");
+      }) as EnvironmentApi["automation"]["updateIssue"],
+      moveIssue: (() => {
+        throw new Error("Not implemented in browser test.");
+      }) as EnvironmentApi["automation"]["moveIssue"],
+      enqueueIssue: (() => {
+        throw new Error("Not implemented in browser test.");
+      }) as EnvironmentApi["automation"]["enqueueIssue"],
+      pauseIssue: (() => {
+        throw new Error("Not implemented in browser test.");
+      }) as EnvironmentApi["automation"]["pauseIssue"],
+      cancelIssue: (() => {
+        throw new Error("Not implemented in browser test.");
+      }) as EnvironmentApi["automation"]["cancelIssue"],
+      retryIssue: (() => {
+        throw new Error("Not implemented in browser test.");
+      }) as EnvironmentApi["automation"]["retryIssue"],
+      getBoardSnapshot: (() => {
+        throw new Error("Not implemented in browser test.");
+      }) as EnvironmentApi["automation"]["getBoardSnapshot"],
+      subscribeBoard: (() => () => undefined) as EnvironmentApi["automation"]["subscribeBoard"],
+      updateQueueConfig: (() => {
+        throw new Error("Not implemented in browser test.");
+      }) as EnvironmentApi["automation"]["updateQueueConfig"],
+    },
   };
 }
 

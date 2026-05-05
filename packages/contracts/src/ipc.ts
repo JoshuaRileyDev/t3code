@@ -43,6 +43,17 @@ import type {
 } from "./terminal.ts";
 import type { ServerUpsertKeybindingInput } from "./server.ts";
 import type {
+  AutomationBoardEvent,
+  AutomationBoardSnapshot,
+  AutomationCreateIssueInput,
+  AutomationIssue,
+  AutomationIssueCommandInput,
+  AutomationMoveIssueInput,
+  AutomationUpdateIssueInput,
+  AutomationUpdateQueueConfigInput,
+  AutomationQueueConfig,
+} from "./automation.ts";
+import type {
   ClientOrchestrationCommand,
   OrchestrationGetFullThreadDiffInput,
   OrchestrationGetFullThreadDiffResult,
@@ -296,5 +307,22 @@ export interface EnvironmentApi {
         onResubscribe?: () => void;
       },
     ) => () => void;
+  };
+  automation: {
+    createIssue: (input: AutomationCreateIssueInput) => Promise<AutomationIssue>;
+    updateIssue: (input: AutomationUpdateIssueInput) => Promise<AutomationIssue>;
+    moveIssue: (input: AutomationMoveIssueInput) => Promise<AutomationIssue>;
+    enqueueIssue: (input: AutomationIssueCommandInput) => Promise<AutomationIssue>;
+    pauseIssue: (input: AutomationIssueCommandInput) => Promise<AutomationIssue>;
+    cancelIssue: (input: AutomationIssueCommandInput) => Promise<AutomationIssue>;
+    retryIssue: (input: AutomationIssueCommandInput) => Promise<AutomationIssue>;
+    getBoardSnapshot: () => Promise<AutomationBoardSnapshot>;
+    subscribeBoard: (
+      callback: (event: AutomationBoardEvent) => void,
+      options?: {
+        onResubscribe?: () => void;
+      },
+    ) => () => void;
+    updateQueueConfig: (input: AutomationUpdateQueueConfigInput) => Promise<AutomationQueueConfig>;
   };
 }

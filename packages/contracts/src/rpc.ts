@@ -36,6 +36,19 @@ import {
 } from "./git.ts";
 import { KeybindingsConfigError } from "./keybindings.ts";
 import {
+  AUTOMATION_WS_METHODS,
+  AutomationBoardEvent,
+  AutomationBoardSnapshot,
+  AutomationCreateIssueInput,
+  AutomationError,
+  AutomationIssue,
+  AutomationIssueCommandInput,
+  AutomationMoveIssueInput,
+  AutomationQueueConfig,
+  AutomationUpdateIssueInput,
+  AutomationUpdateQueueConfigInput,
+} from "./automation.ts";
+import {
   ClientOrchestrationCommand,
   ORCHESTRATION_WS_METHODS,
   OrchestrationDispatchCommandError,
@@ -339,6 +352,67 @@ export const WsOrchestrationSubscribeThreadRpc = Rpc.make(
   },
 );
 
+export const WsAutomationCreateIssueRpc = Rpc.make(AUTOMATION_WS_METHODS.createIssue, {
+  payload: AutomationCreateIssueInput,
+  success: AutomationIssue,
+  error: AutomationError,
+});
+
+export const WsAutomationUpdateIssueRpc = Rpc.make(AUTOMATION_WS_METHODS.updateIssue, {
+  payload: AutomationUpdateIssueInput,
+  success: AutomationIssue,
+  error: AutomationError,
+});
+
+export const WsAutomationMoveIssueRpc = Rpc.make(AUTOMATION_WS_METHODS.moveIssue, {
+  payload: AutomationMoveIssueInput,
+  success: AutomationIssue,
+  error: AutomationError,
+});
+
+export const WsAutomationEnqueueIssueRpc = Rpc.make(AUTOMATION_WS_METHODS.enqueueIssue, {
+  payload: AutomationIssueCommandInput,
+  success: AutomationIssue,
+  error: AutomationError,
+});
+
+export const WsAutomationPauseIssueRpc = Rpc.make(AUTOMATION_WS_METHODS.pauseIssue, {
+  payload: AutomationIssueCommandInput,
+  success: AutomationIssue,
+  error: AutomationError,
+});
+
+export const WsAutomationCancelIssueRpc = Rpc.make(AUTOMATION_WS_METHODS.cancelIssue, {
+  payload: AutomationIssueCommandInput,
+  success: AutomationIssue,
+  error: AutomationError,
+});
+
+export const WsAutomationRetryIssueRpc = Rpc.make(AUTOMATION_WS_METHODS.retryIssue, {
+  payload: AutomationIssueCommandInput,
+  success: AutomationIssue,
+  error: AutomationError,
+});
+
+export const WsAutomationGetBoardSnapshotRpc = Rpc.make(AUTOMATION_WS_METHODS.getBoardSnapshot, {
+  payload: Schema.Struct({}),
+  success: AutomationBoardSnapshot,
+  error: AutomationError,
+});
+
+export const WsAutomationSubscribeBoardRpc = Rpc.make(AUTOMATION_WS_METHODS.subscribeBoard, {
+  payload: Schema.Struct({}),
+  success: AutomationBoardEvent,
+  error: AutomationError,
+  stream: true,
+});
+
+export const WsAutomationUpdateQueueConfigRpc = Rpc.make(AUTOMATION_WS_METHODS.updateQueueConfig, {
+  payload: AutomationUpdateQueueConfigInput,
+  success: AutomationQueueConfig,
+  error: AutomationError,
+});
+
 export const WsSubscribeTerminalEventsRpc = Rpc.make(WS_METHODS.subscribeTerminalEvents, {
   payload: Schema.Struct({}),
   success: TerminalEvent,
@@ -402,4 +476,14 @@ export const WsRpcGroup = RpcGroup.make(
   WsOrchestrationReplayEventsRpc,
   WsOrchestrationSubscribeShellRpc,
   WsOrchestrationSubscribeThreadRpc,
+  WsAutomationCreateIssueRpc,
+  WsAutomationUpdateIssueRpc,
+  WsAutomationMoveIssueRpc,
+  WsAutomationEnqueueIssueRpc,
+  WsAutomationPauseIssueRpc,
+  WsAutomationCancelIssueRpc,
+  WsAutomationRetryIssueRpc,
+  WsAutomationGetBoardSnapshotRpc,
+  WsAutomationSubscribeBoardRpc,
+  WsAutomationUpdateQueueConfigRpc,
 );

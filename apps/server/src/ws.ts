@@ -1,6 +1,8 @@
 import { Cause, Duration, Effect, Layer, Option, Queue, Ref, Schema, Stream } from "effect";
 import {
+  AUTOMATION_WS_METHODS,
   type AuthAccessStreamEvent,
+  AutomationError,
   AuthSessionId,
   CommandId,
   EventId,
@@ -54,6 +56,8 @@ import { ProjectSetupScriptRunner } from "./project/Services/ProjectSetupScriptR
 import { RepositoryIdentityResolver } from "./project/Services/RepositoryIdentityResolver.ts";
 import { ServerEnvironment } from "./environment/Services/ServerEnvironment.ts";
 import { ServerAuth } from "./auth/Services/ServerAuth.ts";
+import { AutomationEngine } from "./automation/Services/AutomationEngine.ts";
+import { AutomationEngineLive } from "./automation/Layers/AutomationEngine.ts";
 import {
   BootstrapCredentialService,
   type BootstrapCredentialChange,
@@ -151,6 +155,7 @@ const makeWsRpcLayer = (currentSessionId: AuthSessionId) =>
       const repositoryIdentityResolver = yield* RepositoryIdentityResolver;
       const serverEnvironment = yield* ServerEnvironment;
       const serverAuth = yield* ServerAuth;
+      const automationEngine = yield* AutomationEngine;
       const bootstrapCredentials = yield* BootstrapCredentialService;
       const sessions = yield* SessionCredentialService;
       const serverCommandId = (tag: string) =>
@@ -745,6 +750,136 @@ const makeWsRpcLayer = (currentSessionId: AuthSessionId) =>
             }),
             { "rpc.aggregate": "orchestration" },
           ),
+        [AUTOMATION_WS_METHODS.createIssue]: (input) =>
+          observeRpcEffect(
+            AUTOMATION_WS_METHODS.createIssue,
+            automationEngine.createIssue(input).pipe(
+              Effect.mapError(
+                (cause) =>
+                  new AutomationError({
+                    message: cause.message,
+                    cause,
+                  }),
+              ),
+            ),
+            { "rpc.aggregate": "automation" },
+          ),
+        [AUTOMATION_WS_METHODS.updateIssue]: (input) =>
+          observeRpcEffect(
+            AUTOMATION_WS_METHODS.updateIssue,
+            automationEngine.updateIssue(input).pipe(
+              Effect.mapError(
+                (cause) =>
+                  new AutomationError({
+                    message: cause.message,
+                    cause,
+                  }),
+              ),
+            ),
+            { "rpc.aggregate": "automation" },
+          ),
+        [AUTOMATION_WS_METHODS.moveIssue]: (input) =>
+          observeRpcEffect(
+            AUTOMATION_WS_METHODS.moveIssue,
+            automationEngine.moveIssue(input).pipe(
+              Effect.mapError(
+                (cause) =>
+                  new AutomationError({
+                    message: cause.message,
+                    cause,
+                  }),
+              ),
+            ),
+            { "rpc.aggregate": "automation" },
+          ),
+        [AUTOMATION_WS_METHODS.enqueueIssue]: (input) =>
+          observeRpcEffect(
+            AUTOMATION_WS_METHODS.enqueueIssue,
+            automationEngine.enqueueIssue(input).pipe(
+              Effect.mapError(
+                (cause) =>
+                  new AutomationError({
+                    message: cause.message,
+                    cause,
+                  }),
+              ),
+            ),
+            { "rpc.aggregate": "automation" },
+          ),
+        [AUTOMATION_WS_METHODS.pauseIssue]: (input) =>
+          observeRpcEffect(
+            AUTOMATION_WS_METHODS.pauseIssue,
+            automationEngine.pauseIssue(input).pipe(
+              Effect.mapError(
+                (cause) =>
+                  new AutomationError({
+                    message: cause.message,
+                    cause,
+                  }),
+              ),
+            ),
+            { "rpc.aggregate": "automation" },
+          ),
+        [AUTOMATION_WS_METHODS.cancelIssue]: (input) =>
+          observeRpcEffect(
+            AUTOMATION_WS_METHODS.cancelIssue,
+            automationEngine.cancelIssue(input).pipe(
+              Effect.mapError(
+                (cause) =>
+                  new AutomationError({
+                    message: cause.message,
+                    cause,
+                  }),
+              ),
+            ),
+            { "rpc.aggregate": "automation" },
+          ),
+        [AUTOMATION_WS_METHODS.retryIssue]: (input) =>
+          observeRpcEffect(
+            AUTOMATION_WS_METHODS.retryIssue,
+            automationEngine.retryIssue(input).pipe(
+              Effect.mapError(
+                (cause) =>
+                  new AutomationError({
+                    message: cause.message,
+                    cause,
+                  }),
+              ),
+            ),
+            { "rpc.aggregate": "automation" },
+          ),
+        [AUTOMATION_WS_METHODS.getBoardSnapshot]: (_input) =>
+          observeRpcEffect(
+            AUTOMATION_WS_METHODS.getBoardSnapshot,
+            automationEngine.getBoardSnapshot().pipe(
+              Effect.mapError(
+                (cause) =>
+                  new AutomationError({
+                    message: cause.message,
+                    cause,
+                  }),
+              ),
+            ),
+            { "rpc.aggregate": "automation" },
+          ),
+        [AUTOMATION_WS_METHODS.subscribeBoard]: (_input) =>
+          observeRpcStream(AUTOMATION_WS_METHODS.subscribeBoard, automationEngine.subscribeBoard, {
+            "rpc.aggregate": "automation",
+          }),
+        [AUTOMATION_WS_METHODS.updateQueueConfig]: (input) =>
+          observeRpcEffect(
+            AUTOMATION_WS_METHODS.updateQueueConfig,
+            automationEngine.updateQueueConfig(input).pipe(
+              Effect.mapError(
+                (cause) =>
+                  new AutomationError({
+                    message: cause.message,
+                    cause,
+                  }),
+              ),
+            ),
+            { "rpc.aggregate": "automation" },
+          ),
         [WS_METHODS.serverGetConfig]: (_input) =>
           observeRpcEffect(WS_METHODS.serverGetConfig, loadServerConfig, {
             "rpc.aggregate": "server",
@@ -1084,7 +1219,10 @@ export const websocketRpcRouteLayer = Layer.unwrap(
           },
         }).pipe(
           Effect.provide(
-            makeWsRpcLayer(session.sessionId).pipe(Layer.provideMerge(RpcSerialization.layerJson)),
+            makeWsRpcLayer(session.sessionId).pipe(
+              Layer.provideMerge(RpcSerialization.layerJson),
+              Layer.provideMerge(AutomationEngineLive),
+            ),
           ),
         );
         return yield* Effect.acquireUseRelease(

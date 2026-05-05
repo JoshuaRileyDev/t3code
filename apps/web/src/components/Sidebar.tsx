@@ -2431,11 +2431,27 @@ const SidebarChromeFooter = memo(function SidebarChromeFooter() {
     }
     void navigate({ to: "/settings" });
   }, [isMobile, navigate, setOpenMobile]);
+  const handleAutomationClick = useCallback(() => {
+    if (isMobile) {
+      setOpenMobile(false);
+    }
+    void navigate({ to: "/automation" });
+  }, [isMobile, navigate, setOpenMobile]);
 
   return (
     <SidebarFooter className="p-2">
       <SidebarUpdatePill />
       <SidebarMenu>
+        <SidebarMenuItem>
+          <SidebarMenuButton
+            size="sm"
+            className="gap-2 px-2 py-1.5 text-muted-foreground/70 hover:bg-accent hover:text-foreground"
+            onClick={handleAutomationClick}
+          >
+            <GitPullRequestIcon className="size-3.5" />
+            <span className="text-xs">Automation</span>
+          </SidebarMenuButton>
+        </SidebarMenuItem>
         <SidebarMenuItem>
           <SidebarMenuButton
             size="sm"

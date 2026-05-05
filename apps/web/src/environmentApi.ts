@@ -45,6 +45,18 @@ export function createEnvironmentApi(rpcClient: WsRpcClient): EnvironmentApi {
       subscribeThread: (input, callback, options) =>
         rpcClient.orchestration.subscribeThread(input, callback, options),
     },
+    automation: {
+      createIssue: rpcClient.automation.createIssue,
+      updateIssue: rpcClient.automation.updateIssue,
+      moveIssue: rpcClient.automation.moveIssue,
+      enqueueIssue: rpcClient.automation.enqueueIssue,
+      pauseIssue: rpcClient.automation.pauseIssue,
+      cancelIssue: rpcClient.automation.cancelIssue,
+      retryIssue: rpcClient.automation.retryIssue,
+      getBoardSnapshot: rpcClient.automation.getBoardSnapshot,
+      subscribeBoard: (callback, options) => rpcClient.automation.subscribeBoard(callback, options),
+      updateQueueConfig: rpcClient.automation.updateQueueConfig,
+    },
   };
 }
 

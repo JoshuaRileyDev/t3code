@@ -1,4 +1,5 @@
 import {
+  AUTOMATION_WS_METHODS,
   type GitActionProgressEvent,
   type GitRunStackedActionInput,
   type GitRunStackedActionResult,
@@ -124,6 +125,18 @@ export interface WsRpcClient {
     readonly getFullThreadDiff: RpcUnaryMethod<typeof ORCHESTRATION_WS_METHODS.getFullThreadDiff>;
     readonly subscribeShell: RpcStreamMethod<typeof ORCHESTRATION_WS_METHODS.subscribeShell>;
     readonly subscribeThread: RpcInputStreamMethod<typeof ORCHESTRATION_WS_METHODS.subscribeThread>;
+  };
+  readonly automation: {
+    readonly createIssue: RpcUnaryMethod<typeof AUTOMATION_WS_METHODS.createIssue>;
+    readonly updateIssue: RpcUnaryMethod<typeof AUTOMATION_WS_METHODS.updateIssue>;
+    readonly moveIssue: RpcUnaryMethod<typeof AUTOMATION_WS_METHODS.moveIssue>;
+    readonly enqueueIssue: RpcUnaryMethod<typeof AUTOMATION_WS_METHODS.enqueueIssue>;
+    readonly pauseIssue: RpcUnaryMethod<typeof AUTOMATION_WS_METHODS.pauseIssue>;
+    readonly cancelIssue: RpcUnaryMethod<typeof AUTOMATION_WS_METHODS.cancelIssue>;
+    readonly retryIssue: RpcUnaryMethod<typeof AUTOMATION_WS_METHODS.retryIssue>;
+    readonly getBoardSnapshot: RpcUnaryNoArgMethod<typeof AUTOMATION_WS_METHODS.getBoardSnapshot>;
+    readonly subscribeBoard: RpcStreamMethod<typeof AUTOMATION_WS_METHODS.subscribeBoard>;
+    readonly updateQueueConfig: RpcUnaryMethod<typeof AUTOMATION_WS_METHODS.updateQueueConfig>;
   };
 }
 
@@ -257,6 +270,32 @@ export function createWsRpcClient(transport: WsTransport): WsRpcClient {
           listener,
           options,
         ),
+    },
+    automation: {
+      createIssue: (input) =>
+        transport.request((client) => client[AUTOMATION_WS_METHODS.createIssue](input)),
+      updateIssue: (input) =>
+        transport.request((client) => client[AUTOMATION_WS_METHODS.updateIssue](input)),
+      moveIssue: (input) =>
+        transport.request((client) => client[AUTOMATION_WS_METHODS.moveIssue](input)),
+      enqueueIssue: (input) =>
+        transport.request((client) => client[AUTOMATION_WS_METHODS.enqueueIssue](input)),
+      pauseIssue: (input) =>
+        transport.request((client) => client[AUTOMATION_WS_METHODS.pauseIssue](input)),
+      cancelIssue: (input) =>
+        transport.request((client) => client[AUTOMATION_WS_METHODS.cancelIssue](input)),
+      retryIssue: (input) =>
+        transport.request((client) => client[AUTOMATION_WS_METHODS.retryIssue](input)),
+      getBoardSnapshot: () =>
+        transport.request((client) => client[AUTOMATION_WS_METHODS.getBoardSnapshot]({})),
+      subscribeBoard: (listener, options) =>
+        transport.subscribe(
+          (client) => client[AUTOMATION_WS_METHODS.subscribeBoard]({}),
+          listener,
+          options,
+        ),
+      updateQueueConfig: (input) =>
+        transport.request((client) => client[AUTOMATION_WS_METHODS.updateQueueConfig](input)),
     },
   };
 }
