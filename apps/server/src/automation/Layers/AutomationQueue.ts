@@ -75,6 +75,10 @@ const makeAutomationQueue = Effect.gen(function* () {
       yield* automationEngine.upsertRun({
         ...run,
         status: result.status === "succeeded" ? "succeeded" : result.status,
+        threadId: (result.threadId as never) ?? run.threadId,
+        branch: result.branch ?? run.branch,
+        worktreePath: result.worktreePath ?? run.worktreePath,
+        pullRequestUrl: result.pullRequestUrl ?? run.pullRequestUrl,
         logSummary: result.summary,
         errorMessage: result.errorMessage ?? null,
         finishedAt: completedAt,

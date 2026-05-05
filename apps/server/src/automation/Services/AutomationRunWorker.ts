@@ -13,6 +13,10 @@ export interface AutomationRunWorkerShape {
       readonly status: "succeeded" | "failed" | "canceled";
       readonly summary: string;
       readonly errorMessage?: string;
+      readonly threadId?: string;
+      readonly branch?: string;
+      readonly worktreePath?: string;
+      readonly pullRequestUrl?: string;
     },
     AutomationEngineError
   >;
