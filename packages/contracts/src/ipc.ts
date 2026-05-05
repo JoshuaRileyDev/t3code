@@ -46,12 +46,14 @@ import type {
   AutomationBoardEvent,
   AutomationBoardSnapshot,
   AutomationCreateIssueInput,
+  AutomationGetRunEventsInput,
   AutomationIssue,
   AutomationIssueCommandInput,
   AutomationMoveIssueInput,
   AutomationUpdateIssueInput,
   AutomationUpdateQueueConfigInput,
   AutomationQueueConfig,
+  AutomationRunEvent,
 } from "./automation.ts";
 import type {
   ClientOrchestrationCommand,
@@ -317,6 +319,9 @@ export interface EnvironmentApi {
     cancelIssue: (input: AutomationIssueCommandInput) => Promise<AutomationIssue>;
     retryIssue: (input: AutomationIssueCommandInput) => Promise<AutomationIssue>;
     getBoardSnapshot: () => Promise<AutomationBoardSnapshot>;
+    getRunEvents: (
+      input: AutomationGetRunEventsInput,
+    ) => Promise<ReadonlyArray<AutomationRunEvent>>;
     subscribeBoard: (
       callback: (event: AutomationBoardEvent) => void,
       options?: {

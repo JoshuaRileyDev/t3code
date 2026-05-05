@@ -863,6 +863,20 @@ const makeWsRpcLayer = (currentSessionId: AuthSessionId) =>
             ),
             { "rpc.aggregate": "automation" },
           ),
+        [AUTOMATION_WS_METHODS.getRunEvents]: (input) =>
+          observeRpcEffect(
+            AUTOMATION_WS_METHODS.getRunEvents,
+            automationEngine.getRunEvents(input).pipe(
+              Effect.mapError(
+                (cause) =>
+                  new AutomationError({
+                    message: cause.message,
+                    cause,
+                  }),
+              ),
+            ),
+            { "rpc.aggregate": "automation" },
+          ),
         [AUTOMATION_WS_METHODS.subscribeBoard]: (_input) =>
           observeRpcStream(AUTOMATION_WS_METHODS.subscribeBoard, automationEngine.subscribeBoard, {
             "rpc.aggregate": "automation",

@@ -135,6 +135,7 @@ export interface WsRpcClient {
     readonly cancelIssue: RpcUnaryMethod<typeof AUTOMATION_WS_METHODS.cancelIssue>;
     readonly retryIssue: RpcUnaryMethod<typeof AUTOMATION_WS_METHODS.retryIssue>;
     readonly getBoardSnapshot: RpcUnaryNoArgMethod<typeof AUTOMATION_WS_METHODS.getBoardSnapshot>;
+    readonly getRunEvents: RpcUnaryMethod<typeof AUTOMATION_WS_METHODS.getRunEvents>;
     readonly subscribeBoard: RpcStreamMethod<typeof AUTOMATION_WS_METHODS.subscribeBoard>;
     readonly updateQueueConfig: RpcUnaryMethod<typeof AUTOMATION_WS_METHODS.updateQueueConfig>;
   };
@@ -288,6 +289,8 @@ export function createWsRpcClient(transport: WsTransport): WsRpcClient {
         transport.request((client) => client[AUTOMATION_WS_METHODS.retryIssue](input)),
       getBoardSnapshot: () =>
         transport.request((client) => client[AUTOMATION_WS_METHODS.getBoardSnapshot]({})),
+      getRunEvents: (input) =>
+        transport.request((client) => client[AUTOMATION_WS_METHODS.getRunEvents](input)),
       subscribeBoard: (listener, options) =>
         transport.subscribe(
           (client) => client[AUTOMATION_WS_METHODS.subscribeBoard]({}),

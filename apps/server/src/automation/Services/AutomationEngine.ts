@@ -2,12 +2,14 @@ import type {
   AutomationBoardEvent,
   AutomationBoardSnapshot,
   AutomationCreateIssueInput,
+  AutomationGetRunEventsInput,
   AutomationIssue,
   AutomationIssueStatus,
   AutomationIssueCommandInput,
   AutomationMoveIssueInput,
   AutomationQueueConfig,
   AutomationRun,
+  AutomationRunEvent,
   AutomationUpdateIssueInput,
   AutomationUpdateQueueConfigInput,
 } from "@t3tools/contracts";
@@ -39,6 +41,9 @@ export interface AutomationEngineShape {
     input: AutomationIssueCommandInput,
   ) => Effect.Effect<AutomationIssue, AutomationEngineError>;
   readonly getBoardSnapshot: () => Effect.Effect<AutomationBoardSnapshot, AutomationEngineError>;
+  readonly getRunEvents: (
+    input: AutomationGetRunEventsInput,
+  ) => Effect.Effect<ReadonlyArray<AutomationRunEvent>, AutomationEngineError>;
   readonly updateQueueConfig: (
     input: AutomationUpdateQueueConfigInput,
   ) => Effect.Effect<AutomationQueueConfig, AutomationEngineError>;

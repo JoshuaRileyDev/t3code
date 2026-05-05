@@ -16,6 +16,7 @@ export const AUTOMATION_WS_METHODS = {
   cancelIssue: "automation.cancelIssue",
   retryIssue: "automation.retryIssue",
   getBoardSnapshot: "automation.getBoardSnapshot",
+  getRunEvents: "automation.getRunEvents",
   subscribeBoard: "automation.subscribeBoard",
   updateQueueConfig: "automation.updateQueueConfig",
 } as const;
@@ -83,6 +84,19 @@ export const AutomationRun = Schema.Struct({
 });
 export type AutomationRun = typeof AutomationRun.Type;
 
+export const AutomationRunEventLevel = Schema.Literals(["info", "warning", "error"]);
+export type AutomationRunEventLevel = typeof AutomationRunEventLevel.Type;
+
+export const AutomationRunEvent = Schema.Struct({
+  id: TrimmedNonEmptyString,
+  runId: AutomationRunId,
+  level: AutomationRunEventLevel,
+  message: Schema.String,
+  payloadJson: Schema.NullOr(Schema.String),
+  createdAt: IsoDateTime,
+});
+export type AutomationRunEvent = typeof AutomationRunEvent.Type;
+
 export const AutomationQueueConfig = Schema.Struct({
   globalConcurrency: NonNegativeInt.pipe(Schema.withDecodingDefault(Effect.succeed(2))),
   defaultProjectConcurrency: NonNegativeInt.pipe(Schema.withDecodingDefault(Effect.succeed(1))),
@@ -148,6 +162,11 @@ export const AutomationIssueCommandInput = Schema.Struct({
   issueId: AutomationIssueId,
 });
 export type AutomationIssueCommandInput = typeof AutomationIssueCommandInput.Type;
+
+export const AutomationGetRunEventsInput = Schema.Struct({
+  runId: AutomationRunId,
+});
+export type AutomationGetRunEventsInput = typeof AutomationGetRunEventsInput.Type;
 
 export const AutomationUpdateQueueConfigInput = Schema.Struct({
   globalConcurrency: Schema.optional(NonNegativeInt),

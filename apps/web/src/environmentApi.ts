@@ -54,6 +54,7 @@ export function createEnvironmentApi(rpcClient: WsRpcClient): EnvironmentApi {
       cancelIssue: rpcClient.automation.cancelIssue,
       retryIssue: rpcClient.automation.retryIssue,
       getBoardSnapshot: rpcClient.automation.getBoardSnapshot,
+      getRunEvents: rpcClient.automation.getRunEvents,
       subscribeBoard: (callback, options) => rpcClient.automation.subscribeBoard(callback, options),
       updateQueueConfig: rpcClient.automation.updateQueueConfig,
     },

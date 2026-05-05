@@ -41,10 +41,12 @@ import {
   AutomationBoardSnapshot,
   AutomationCreateIssueInput,
   AutomationError,
+  AutomationGetRunEventsInput,
   AutomationIssue,
   AutomationIssueCommandInput,
   AutomationMoveIssueInput,
   AutomationQueueConfig,
+  AutomationRunEvent,
   AutomationUpdateIssueInput,
   AutomationUpdateQueueConfigInput,
 } from "./automation.ts";
@@ -400,6 +402,12 @@ export const WsAutomationGetBoardSnapshotRpc = Rpc.make(AUTOMATION_WS_METHODS.ge
   error: AutomationError,
 });
 
+export const WsAutomationGetRunEventsRpc = Rpc.make(AUTOMATION_WS_METHODS.getRunEvents, {
+  payload: AutomationGetRunEventsInput,
+  success: Schema.Array(AutomationRunEvent),
+  error: AutomationError,
+});
+
 export const WsAutomationSubscribeBoardRpc = Rpc.make(AUTOMATION_WS_METHODS.subscribeBoard, {
   payload: Schema.Struct({}),
   success: AutomationBoardEvent,
@@ -484,6 +492,7 @@ export const WsRpcGroup = RpcGroup.make(
   WsAutomationCancelIssueRpc,
   WsAutomationRetryIssueRpc,
   WsAutomationGetBoardSnapshotRpc,
+  WsAutomationGetRunEventsRpc,
   WsAutomationSubscribeBoardRpc,
   WsAutomationUpdateQueueConfigRpc,
 );

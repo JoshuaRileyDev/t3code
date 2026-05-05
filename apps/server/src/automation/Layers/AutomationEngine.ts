@@ -4,14 +4,17 @@ import type {
   AutomationIssue,
   AutomationQueueConfig,
   AutomationRun,
+  AutomationRunEvent,
 } from "@t3tools/contracts";
 import { Effect, Layer, Option, PubSub, Stream } from "effect";
 
 import { AutomationIssueRepositoryLive } from "../../persistence/Layers/AutomationIssues.ts";
 import { AutomationQueueConfigRepositoryLive } from "../../persistence/Layers/AutomationQueueConfig.ts";
+import { AutomationRunEventRepositoryLive } from "../../persistence/Layers/AutomationRunEvents.ts";
 import { AutomationRunRepositoryLive } from "../../persistence/Layers/AutomationRuns.ts";
 import { AutomationIssueRepository } from "../../persistence/Services/AutomationIssues.ts";
 import { AutomationQueueConfigRepository } from "../../persistence/Services/AutomationQueueConfig.ts";
+import { AutomationRunEventRepository } from "../../persistence/Services/AutomationRunEvents.ts";
 import { AutomationRunRepository } from "../../persistence/Services/AutomationRuns.ts";
 import type { ProjectionRepositoryError } from "../../persistence/Errors.ts";
 import { AutomationEngineError } from "../Errors.ts";
@@ -70,6 +73,7 @@ const makeAutomationEngine = Effect.gen(function* () {
   const bus = yield* PubSub.unbounded<AutomationBoardEvent>();
   const issueRepo = yield* AutomationIssueRepository;
   const runRepo = yield* AutomationRunRepository;
+  const runEventRepo = yield* AutomationRunEventRepository;
   const queueRepo = yield* AutomationQueueConfigRepository;
 
   const publish = (event: AutomationBoardEvent) => PubSub.publish(bus, event).pipe(Effect.asVoid);
@@ -234,6 +238,11 @@ const makeAutomationEngine = Effect.gen(function* () {
       }),
     );
 
+  const getRunEvents: AutomationEngineShape["getRunEvents"] = (input) =>
+    mapRepoError(runEventRepo.listByRun({ runId: input.runId })).pipe(
+      Effect.map((rows) => rows as ReadonlyArray<AutomationRunEvent>),
+    );
+
   const upsertRun: AutomationEngineShape["upsertRun"] = (run) =>
     mapRepoError(runRepo.upsert(run as never)).pipe(
       Effect.flatMap(() => publish({ kind: "run-upserted", run })),
@@ -259,6 +268,7 @@ const makeAutomationEngine = Effect.gen(function* () {
     cancelIssue,
     retryIssue,
     getBoardSnapshot,
+    getRunEvents,
     updateQueueConfig,
     upsertRun,
     setIssueStatusInternal,
@@ -271,5 +281,6 @@ const makeAutomationEngine = Effect.gen(function* () {
 export const AutomationEngineLive = Layer.effect(AutomationEngine, makeAutomationEngine).pipe(
   Layer.provideMerge(AutomationIssueRepositoryLive),
   Layer.provideMerge(AutomationRunRepositoryLive),
+  Layer.provideMerge(AutomationRunEventRepositoryLive),
   Layer.provideMerge(AutomationQueueConfigRepositoryLive),
 );

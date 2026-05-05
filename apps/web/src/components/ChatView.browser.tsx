@@ -244,6 +244,9 @@ function createMockEnvironmentApi(input: {
       getBoardSnapshot: (() => {
         throw new Error("Not implemented in browser test.");
       }) as EnvironmentApi["automation"]["getBoardSnapshot"],
+      getRunEvents: (() => {
+        throw new Error("Not implemented in browser test.");
+      }) as EnvironmentApi["automation"]["getRunEvents"],
       subscribeBoard: (() => () => undefined) as EnvironmentApi["automation"]["subscribeBoard"],
       updateQueueConfig: (() => {
         throw new Error("Not implemented in browser test.");
