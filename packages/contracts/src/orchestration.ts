@@ -1,4 +1,9 @@
-import { Effect, Option, Schema, SchemaIssue, SchemaTransformation, Struct } from "effect";
+import * as Effect from "effect/Effect";
+import * as Option from "effect/Option";
+import * as Schema from "effect/Schema";
+import * as SchemaIssue from "effect/SchemaIssue";
+import * as SchemaTransformation from "effect/SchemaTransformation";
+import * as Struct from "effect/Struct";
 import { ProviderOptionSelections } from "./model.ts";
 import { RepositoryIdentity } from "./environment.ts";
 import {
@@ -22,6 +27,7 @@ export const ORCHESTRATION_WS_METHODS = {
   getTurnDiff: "orchestration.getTurnDiff",
   getFullThreadDiff: "orchestration.getFullThreadDiff",
   replayEvents: "orchestration.replayEvents",
+  getArchivedShellSnapshot: "orchestration.getArchivedShellSnapshot",
   subscribeShell: "orchestration.subscribeShell",
   subscribeThread: "orchestration.subscribeThread",
 } as const;
@@ -188,6 +194,17 @@ export const ProjectScript = Schema.Struct({
   command: TrimmedNonEmptyString,
   icon: ProjectScriptIcon,
   runOnWorktreeCreate: Schema.Boolean,
+  /**
+   * URL to open in the in-app browser preview when this script runs (or
+   * when the user explicitly requests a preview). Optional; only honored on
+   * the desktop build.
+   */
+  previewUrl: Schema.optional(TrimmedNonEmptyString),
+  /**
+   * When true, automatically open the preview panel pointed at `previewUrl`
+   * the moment this script starts. Ignored without `previewUrl` or on web.
+   */
+  autoOpenPreview: Schema.optional(Schema.Boolean),
 });
 export type ProjectScript = typeof ProjectScript.Type;
 
@@ -548,6 +565,7 @@ const ThreadTurnStartBootstrapPrepareWorktree = Schema.Struct({
   projectCwd: TrimmedNonEmptyString,
   baseBranch: TrimmedNonEmptyString,
   branch: Schema.optional(TrimmedNonEmptyString),
+  startFromOrigin: Schema.optional(Schema.Boolean),
 });
 
 const ThreadTurnStartBootstrap = Schema.Struct({
@@ -1171,7 +1189,10 @@ export const DispatchResult = Schema.Struct({
 export type DispatchResult = typeof DispatchResult.Type;
 
 export const OrchestrationGetTurnDiffInput = TurnCountRange.mapFields(
-  Struct.assign({ threadId: ThreadId }),
+  Struct.assign({
+    threadId: ThreadId,
+    ignoreWhitespace: Schema.optionalKey(Schema.Boolean),
+  }),
   { unsafePreserveChecks: true },
 );
 export type OrchestrationGetTurnDiffInput = typeof OrchestrationGetTurnDiffInput.Type;
@@ -1182,6 +1203,7 @@ export type OrchestrationGetTurnDiffResult = typeof OrchestrationGetTurnDiffResu
 export const OrchestrationGetFullThreadDiffInput = Schema.Struct({
   threadId: ThreadId,
   toTurnCount: NonNegativeInt,
+  ignoreWhitespace: Schema.optionalKey(Schema.Boolean),
 });
 export type OrchestrationGetFullThreadDiffInput = typeof OrchestrationGetFullThreadDiffInput.Type;
 
@@ -1213,6 +1235,10 @@ export const OrchestrationRpcSchemas = {
     input: OrchestrationReplayEventsInput,
     output: OrchestrationReplayEventsResult,
   },
+  getArchivedShellSnapshot: {
+    input: Schema.Struct({}),
+    output: OrchestrationShellSnapshot,
+  },
   subscribeThread: {
     input: OrchestrationSubscribeThreadInput,
     output: OrchestrationThreadStreamItem,
@@ -1227,7 +1253,7 @@ export class OrchestrationGetSnapshotError extends Schema.TaggedErrorClass<Orche
   "OrchestrationGetSnapshotError",
   {
     message: TrimmedNonEmptyString,
-    cause: Schema.optional(Schema.Defect),
+    cause: Schema.optional(Schema.Defect()),
   },
 ) {}
 
@@ -1235,7 +1261,7 @@ export class OrchestrationDispatchCommandError extends Schema.TaggedErrorClass<O
   "OrchestrationDispatchCommandError",
   {
     message: TrimmedNonEmptyString,
-    cause: Schema.optional(Schema.Defect),
+    cause: Schema.optional(Schema.Defect()),
   },
 ) {}
 
@@ -1243,7 +1269,7 @@ export class OrchestrationGetTurnDiffError extends Schema.TaggedErrorClass<Orche
   "OrchestrationGetTurnDiffError",
   {
     message: TrimmedNonEmptyString,
-    cause: Schema.optional(Schema.Defect),
+    cause: Schema.optional(Schema.Defect()),
   },
 ) {}
 
@@ -1251,7 +1277,7 @@ export class OrchestrationGetFullThreadDiffError extends Schema.TaggedErrorClass
   "OrchestrationGetFullThreadDiffError",
   {
     message: TrimmedNonEmptyString,
-    cause: Schema.optional(Schema.Defect),
+    cause: Schema.optional(Schema.Defect()),
   },
 ) {}
 
@@ -1259,6 +1285,6 @@ export class OrchestrationReplayEventsError extends Schema.TaggedErrorClass<Orch
   "OrchestrationReplayEventsError",
   {
     message: TrimmedNonEmptyString,
-    cause: Schema.optional(Schema.Defect),
+    cause: Schema.optional(Schema.Defect()),
   },
 ) {}

@@ -24,19 +24,18 @@ const InitializeRequest = jsonRpcRequest("initialize", AcpSchema.InitializeReque
 const InitializeResponse = jsonRpcResponse(AcpSchema.InitializeResponse);
 const ExtRequest = jsonRpcRequest("x/test", Schema.Struct({ hello: Schema.String }));
 const ExtResponse = jsonRpcResponse(Schema.Struct({ ok: Schema.Boolean }));
-
 const mockPeerPath = Effect.map(Effect.service(Path.Path), (path) =>
   path.join(import.meta.dirname, "../test/fixtures/acp-mock-peer.ts"),
 );
+const mockPeerArgs = (path: string) => [path];
 
 it.layer(NodeServices.layer)("effect-acp client", (it) => {
   const makeHandle = (env?: Record<string, string>) =>
     Effect.gen(function* () {
       const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
       const path = yield* Path.Path;
-      const command = ChildProcess.make("bun", ["run", yield* mockPeerPath], {
+      const command = ChildProcess.make(process.execPath, mockPeerArgs(yield* mockPeerPath), {
         cwd: path.join(import.meta.dirname, ".."),
-        shell: process.platform === "win32",
         ...(env ? { env: { ...process.env, ...env } } : {}),
       });
       return yield* spawner.spawn(command);
@@ -148,7 +147,7 @@ it.layer(NodeServices.layer)("effect-acp client", (it) => {
   );
 
   it.effect(
-    "returns formatted invalid params when a typed extension request payload is wrong",
+    "returns structured invalid params without exposing values from typed extension request payloads",
     () =>
       Effect.gen(function* () {
         const handle = yield* makeHandle({ ACP_MOCK_BAD_TYPED_REQUEST: "1" });
@@ -214,8 +213,8 @@ it.layer(NodeServices.layer)("effect-acp client", (it) => {
           assert.fail("Expected prompt to fail for invalid typed extension payload");
         }
         const rendered = Cause.pretty(result.cause);
-        assert.include(rendered, "Invalid x/typed_request payload:");
-        assert.include(rendered, "Expected string, got 123");
+        assert.include(rendered, "Invalid payload for ACP extension method 'x/typed_request'.");
+        assert.notInclude(rendered, "Expected string, got 123");
       }),
   );
 

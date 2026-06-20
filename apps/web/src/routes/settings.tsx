@@ -24,7 +24,7 @@ function RestoreDefaultsButton({ onRestored }: { onRestored: () => void }) {
       disabled={changedSettingLabels.length === 0}
       onClick={() => void restoreDefaults()}
     >
-      <RotateCcwIcon className="size-3.5" />
+      <RotateCcwIcon className="mx-1 size-3.5" />
       Restore defaults
     </Button>
   );
@@ -104,7 +104,10 @@ function SettingsRouteLayout() {
 
 export const Route = createFileRoute("/settings")({
   beforeLoad: async ({ context, location }) => {
-    if (context.authGateState.status !== "authenticated") {
+    if (
+      context.authGateState.status !== "authenticated" &&
+      context.authGateState.status !== "hosted-static"
+    ) {
       throw redirect({ to: "/pair", replace: true });
     }
 

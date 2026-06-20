@@ -24,7 +24,16 @@ import {
   type ProviderRuntimeEvent,
   type ProviderSession,
 } from "@t3tools/contracts";
-import { Cause, Effect, Layer, Option, PubSub, Ref, Schema, SchemaIssue, Stream } from "effect";
+import { causeErrorTag } from "@t3tools/shared/observability";
+import * as DateTime from "effect/DateTime";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
+import * as PubSub from "effect/PubSub";
+import * as Ref from "effect/Ref";
+import * as Schema from "effect/Schema";
+import * as SchemaIssue from "effect/SchemaIssue";
+import * as Stream from "effect/Stream";
 
 import {
   increment,
@@ -38,15 +47,15 @@ import {
 } from "../../observability/Metrics.ts";
 import { type ProviderAdapterError, ProviderValidationError } from "../Errors.ts";
 import type { ProviderAdapterShape } from "../Services/ProviderAdapter.ts";
-import { ProviderAdapterRegistry } from "../Services/ProviderAdapterRegistry.ts";
-import { ProviderService, type ProviderServiceShape } from "../Services/ProviderService.ts";
-import {
-  ProviderSessionDirectory,
-  type ProviderRuntimeBinding,
-} from "../Services/ProviderSessionDirectory.ts";
+import * as ProviderAdapterRegistry from "../Services/ProviderAdapterRegistry.ts";
+import * as ProviderService from "../Services/ProviderService.ts";
+import * as ProviderSessionDirectory from "../Services/ProviderSessionDirectory.ts";
 import { type EventNdjsonLogger } from "./EventNdjsonLogger.ts";
-import { ProviderEventLoggers } from "./ProviderEventLoggers.ts";
-import { AnalyticsService } from "../../telemetry/Services/AnalyticsService.ts";
+import * as ProviderEventLoggers from "./ProviderEventLoggers.ts";
+import * as AnalyticsService from "../../telemetry/AnalyticsService.ts";
+import * as McpProviderSession from "../../mcp/McpProviderSession.ts";
+import * as McpSessionRegistry from "../../mcp/McpSessionRegistry.ts";
+const isModelSelection = Schema.is(ModelSelection);
 
 /**
  * Hook for tests that want to override the canonical event logger pulled
@@ -56,6 +65,9 @@ import { AnalyticsService } from "../../telemetry/Services/AnalyticsService.ts";
 export interface ProviderServiceLiveOptions {
   readonly canonicalEventLogger?: EventNdjsonLogger;
 }
+
+type ProviderServiceMethod<Name extends keyof ProviderService.ProviderService["Service"]> =
+  ProviderService.ProviderService["Service"][Name];
 
 const ProviderRollbackConversationInput = Schema.Struct({
   threadId: ThreadId,
@@ -78,8 +90,9 @@ const decodeInputOrValidationError = <S extends Schema.Top>(input: {
   readonly operation: string;
   readonly schema: S;
   readonly payload: unknown;
-}) =>
-  Schema.decodeUnknownEffect(input.schema)(input.payload).pipe(
+}) => {
+  const decodeProviderRequestInput = Schema.decodeUnknownEffect(input.schema);
+  return decodeProviderRequestInput(input.payload).pipe(
     Effect.mapError(
       (schemaError) =>
         new ProviderValidationError({
@@ -89,6 +102,7 @@ const decodeInputOrValidationError = <S extends Schema.Top>(input: {
         }),
     ),
   );
+};
 
 function toRuntimeStatus(session: ProviderSession): "starting" | "running" | "stopped" | "error" {
   switch (session.status) {
@@ -127,17 +141,17 @@ function toRuntimePayloadFromSession(
 }
 
 function readPersistedModelSelection(
-  runtimePayload: ProviderRuntimeBinding["runtimePayload"],
+  runtimePayload: ProviderSessionDirectory.ProviderRuntimeBinding["runtimePayload"],
 ): ModelSelection | undefined {
   if (!runtimePayload || typeof runtimePayload !== "object" || Array.isArray(runtimePayload)) {
     return undefined;
   }
   const raw = "modelSelection" in runtimePayload ? runtimePayload.modelSelection : undefined;
-  return Schema.is(ModelSelection)(raw) ? raw : undefined;
+  return isModelSelection(raw) ? raw : undefined;
 }
 
 function readPersistedCwd(
-  runtimePayload: ProviderRuntimeBinding["runtimePayload"],
+  runtimePayload: ProviderSessionDirectory.ProviderRuntimeBinding["runtimePayload"],
 ): string | undefined {
   if (!runtimePayload || typeof runtimePayload !== "object" || Array.isArray(runtimePayload)) {
     return undefined;
@@ -188,17 +202,30 @@ const correlateRuntimeEventWithInstance = (
 const makeProviderService = Effect.fn("makeProviderService")(function* (
   options?: ProviderServiceLiveOptions,
 ) {
-  const analytics = yield* Effect.service(AnalyticsService);
-  const eventLoggers = yield* ProviderEventLoggers;
+  const analytics = yield* Effect.service(AnalyticsService.AnalyticsService);
+  const eventLoggers = yield* ProviderEventLoggers.ProviderEventLoggers;
   // Options-provided logger wins (test overrides); otherwise we take whatever
   // the `ProviderEventLoggers` tag exposes — `undefined` means "no canonical
   // log writer is attached", which downstream code already handles as a
   // no-op.
   const canonicalEventLogger = options?.canonicalEventLogger ?? eventLoggers.canonical;
 
-  const registry = yield* ProviderAdapterRegistry;
-  const directory = yield* ProviderSessionDirectory;
+  const registry = yield* ProviderAdapterRegistry.ProviderAdapterRegistry;
+  const directory = yield* ProviderSessionDirectory.ProviderSessionDirectory;
   const runtimeEventPubSub = yield* PubSub.unbounded<ProviderRuntimeEvent>();
+  const nowIso = Effect.map(DateTime.now, DateTime.formatIso);
+  const prepareMcpSession = (threadId: ThreadId, providerInstanceId: ProviderInstanceId) =>
+    McpSessionRegistry.issueActiveMcpCredential({ threadId, providerInstanceId }).pipe(
+      Effect.tap((credential) =>
+        credential
+          ? Effect.sync(() => McpProviderSession.setMcpProviderSession(credential.config))
+          : Effect.void,
+      ),
+    );
+  const clearMcpSession = (threadId: ThreadId) =>
+    McpSessionRegistry.revokeActiveMcpThread(threadId).pipe(
+      Effect.tap(() => Effect.sync(() => McpProviderSession.clearMcpProviderSession(threadId))),
+    );
 
   const publishRuntimeEvent = (event: ProviderRuntimeEvent): Effect.Effect<void> =>
     Effect.succeed(event).pipe(
@@ -326,7 +353,7 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
   ).pipe(Effect.forkScoped);
 
   const recoverSessionForThread = Effect.fn("recoverSessionForThread")(function* (input: {
-    readonly binding: ProviderRuntimeBinding;
+    readonly binding: ProviderSessionDirectory.ProviderRuntimeBinding;
     readonly operation: string;
   }) {
     const bindingInstanceId = yield* requireBindingInstanceId(input.operation, input.binding);
@@ -370,16 +397,20 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
       const persistedCwd = readPersistedCwd(input.binding.runtimePayload);
       const persistedModelSelection = readPersistedModelSelection(input.binding.runtimePayload);
 
-      const resumed = yield* adapter.startSession({
-        threadId: input.binding.threadId,
-        provider: input.binding.provider,
-        providerInstanceId: bindingInstanceId,
-        ...(persistedCwd ? { cwd: persistedCwd } : {}),
-        ...(persistedModelSelection ? { modelSelection: persistedModelSelection } : {}),
-        ...(hasResumeCursor ? { resumeCursor: input.binding.resumeCursor } : {}),
-        runtimeMode: input.binding.runtimeMode ?? "full-access",
-      });
+      yield* prepareMcpSession(input.binding.threadId, bindingInstanceId);
+      const resumed = yield* adapter
+        .startSession({
+          threadId: input.binding.threadId,
+          provider: input.binding.provider,
+          providerInstanceId: bindingInstanceId,
+          ...(persistedCwd ? { cwd: persistedCwd } : {}),
+          ...(persistedModelSelection ? { modelSelection: persistedModelSelection } : {}),
+          ...(hasResumeCursor ? { resumeCursor: input.binding.resumeCursor } : {}),
+          runtimeMode: input.binding.runtimeMode ?? "full-access",
+        })
+        .pipe(Effect.onError(() => clearMcpSession(input.binding.threadId)));
       if (resumed.provider !== adapter.provider) {
+        yield* clearMcpSession(input.binding.threadId);
         return yield* toValidationError(
           input.operation,
           `Adapter/provider mismatch while recovering thread '${input.binding.threadId}'. Expected '${adapter.provider}', received '${resumed.provider}'.`,
@@ -488,7 +519,7 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
     );
   });
 
-  const startSession: ProviderServiceShape["startSession"] = Effect.fn("startSession")(
+  const startSession: ProviderServiceMethod<"startSession"> = Effect.fn("startSession")(
     function* (threadId, rawInput) {
       const parsed = yield* decodeInputOrValidationError({
         operation: "ProviderService.startSession",
@@ -559,14 +590,18 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
           "provider.cwd.effective": effectiveCwd ?? "",
         });
         const adapter = yield* registry.getByInstance(resolvedInstanceId);
-        const session = yield* adapter.startSession({
-          ...input,
-          providerInstanceId: resolvedInstanceId,
-          ...(effectiveCwd !== undefined ? { cwd: effectiveCwd } : {}),
-          ...(effectiveResumeCursor !== undefined ? { resumeCursor: effectiveResumeCursor } : {}),
-        });
+        yield* prepareMcpSession(threadId, resolvedInstanceId);
+        const session = yield* adapter
+          .startSession({
+            ...input,
+            providerInstanceId: resolvedInstanceId,
+            ...(effectiveCwd !== undefined ? { cwd: effectiveCwd } : {}),
+            ...(effectiveResumeCursor !== undefined ? { resumeCursor: effectiveResumeCursor } : {}),
+          })
+          .pipe(Effect.onError(() => clearMcpSession(threadId)));
 
         if (session.provider !== adapter.provider) {
+          yield* clearMcpSession(threadId);
           return yield* toValidationError(
             "ProviderService.startSession",
             `Adapter/provider mismatch: requested '${adapter.provider}', received '${session.provider}'.`,
@@ -607,7 +642,7 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
     },
   );
 
-  const sendTurn: ProviderServiceShape["sendTurn"] = Effect.fn("sendTurn")(function* (rawInput) {
+  const sendTurn: ProviderServiceMethod<"sendTurn"> = Effect.fn("sendTurn")(function* (rawInput) {
     const parsed = yield* decodeInputOrValidationError({
       operation: "ProviderService.sendTurn",
       schema: ProviderSendTurnInput,
@@ -655,7 +690,7 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
           ...(input.modelSelection !== undefined ? { modelSelection: input.modelSelection } : {}),
           activeTurnId: turn.turnId,
           lastRuntimeEvent: "provider.sendTurn",
-          lastRuntimeEventAt: new Date().toISOString(),
+          lastRuntimeEventAt: yield* nowIso,
         },
       });
       yield* analytics.record("provider.turn.sent", {
@@ -682,7 +717,7 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
     );
   });
 
-  const interruptTurn: ProviderServiceShape["interruptTurn"] = Effect.fn("interruptTurn")(
+  const interruptTurn: ProviderServiceMethod<"interruptTurn"> = Effect.fn("interruptTurn")(
     function* (rawInput) {
       const input = yield* decodeInputOrValidationError({
         operation: "ProviderService.interruptTurn",
@@ -719,7 +754,7 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
     },
   );
 
-  const respondToRequest: ProviderServiceShape["respondToRequest"] = Effect.fn("respondToRequest")(
+  const respondToRequest: ProviderServiceMethod<"respondToRequest"> = Effect.fn("respondToRequest")(
     function* (rawInput) {
       const input = yield* decodeInputOrValidationError({
         operation: "ProviderService.respondToRequest",
@@ -757,7 +792,7 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
     },
   );
 
-  const respondToUserInput: ProviderServiceShape["respondToUserInput"] = Effect.fn(
+  const respondToUserInput: ProviderServiceMethod<"respondToUserInput"> = Effect.fn(
     "respondToUserInput",
   )(function* (rawInput) {
     const input = yield* decodeInputOrValidationError({
@@ -791,7 +826,7 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
     );
   });
 
-  const stopSession: ProviderServiceShape["stopSession"] = Effect.fn("stopSession")(
+  const stopSession: ProviderServiceMethod<"stopSession"> = Effect.fn("stopSession")(
     function* (rawInput) {
       const input = yield* decodeInputOrValidationError({
         operation: "ProviderService.stopSession",
@@ -814,6 +849,7 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
         if (routed.isActive) {
           yield* routed.adapter.stopSession(routed.threadId);
         }
+        yield* clearMcpSession(input.threadId);
         yield* directory.upsert({
           threadId: input.threadId,
           provider: routed.adapter.provider,
@@ -838,7 +874,7 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
     },
   );
 
-  const listSessions: ProviderServiceShape["listSessions"] = Effect.fn("listSessions")(
+  const listSessions: ProviderServiceMethod<"listSessions"> = Effect.fn("listSessions")(
     function* () {
       const currentAdapters = yield* getAdapterEntries;
       const sessionsByProvider = yield* Effect.forEach(currentAdapters, ([instanceId, adapter]) =>
@@ -859,13 +895,22 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
             (threadId) =>
               directory
                 .getBinding(threadId)
-                .pipe(Effect.orElseSucceed(() => Option.none<ProviderRuntimeBinding>())),
+                .pipe(
+                  Effect.orElseSucceed(() =>
+                    Option.none<ProviderSessionDirectory.ProviderRuntimeBinding>(),
+                  ),
+                ),
             { concurrency: "unbounded" },
           ),
         ),
-        Effect.orElseSucceed(() => [] as Array<Option.Option<ProviderRuntimeBinding>>),
+        Effect.orElseSucceed(
+          () => [] as Array<Option.Option<ProviderSessionDirectory.ProviderRuntimeBinding>>,
+        ),
       );
-      const bindingsByThreadId = new Map<ThreadId, ProviderRuntimeBinding>();
+      const bindingsByThreadId = new Map<
+        ThreadId,
+        ProviderSessionDirectory.ProviderRuntimeBinding
+      >();
       for (const bindingOption of persistedBindings) {
         const binding = Option.getOrUndefined(bindingOption);
         if (binding) {
@@ -916,13 +961,13 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
     },
   );
 
-  const getCapabilities: ProviderServiceShape["getCapabilities"] = (instanceId) =>
+  const getCapabilities: ProviderServiceMethod<"getCapabilities"> = (instanceId) =>
     registry.getByInstance(instanceId).pipe(Effect.map((adapter) => adapter.capabilities));
 
-  const getInstanceInfo: ProviderServiceShape["getInstanceInfo"] = (instanceId) =>
+  const getInstanceInfo: ProviderServiceMethod<"getInstanceInfo"> = (instanceId) =>
     registry.getInstanceInfo(instanceId);
 
-  const rollbackConversation: ProviderServiceShape["rollbackConversation"] = Effect.fn(
+  const rollbackConversation: ProviderServiceMethod<"rollbackConversation"> = Effect.fn(
     "rollbackConversation",
   )(function* (rawInput) {
     const input = yield* decodeInputOrValidationError({
@@ -977,27 +1022,36 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
       ),
     ).pipe(Effect.map((sessionsByAdapter) => sessionsByAdapter.flatMap((sessions) => sessions)));
     yield* Effect.forEach(activeSessions, (session) =>
-      upsertSessionBinding(session, session.threadId, {
-        lastRuntimeEvent: "provider.stopAll",
-        lastRuntimeEventAt: new Date().toISOString(),
-      }),
+      Effect.flatMap(nowIso, (lastRuntimeEventAt) =>
+        upsertSessionBinding(session, session.threadId, {
+          lastRuntimeEvent: "provider.stopAll",
+          lastRuntimeEventAt,
+        }),
+      ),
     ).pipe(Effect.asVoid);
     yield* Effect.forEach(currentAdapters, ([, adapter]) => adapter.stopAll()).pipe(Effect.asVoid);
+    yield* McpSessionRegistry.revokeAllActiveMcpCredentials();
+    McpProviderSession.clearAllMcpProviderSessions();
     const bindings = yield* directory.listBindings().pipe(Effect.orElseSucceed(() => []));
-    yield* Effect.forEach(bindings, (binding) => {
-      const providerInstanceId = dieOnMissingBindingInstanceId("ProviderService.stopAll", binding);
-      return directory.upsert({
-        threadId: binding.threadId,
-        provider: binding.provider,
-        providerInstanceId,
-        status: "stopped",
-        runtimePayload: {
-          activeTurnId: null,
-          lastRuntimeEvent: "provider.stopAll",
-          lastRuntimeEventAt: new Date().toISOString(),
-        },
-      });
-    }).pipe(Effect.asVoid);
+    yield* Effect.forEach(bindings, (binding) =>
+      Effect.gen(function* () {
+        const providerInstanceId = dieOnMissingBindingInstanceId(
+          "ProviderService.stopAll",
+          binding,
+        );
+        return yield* directory.upsert({
+          threadId: binding.threadId,
+          provider: binding.provider,
+          providerInstanceId,
+          status: "stopped",
+          runtimePayload: {
+            activeTurnId: null,
+            lastRuntimeEvent: "provider.stopAll",
+            lastRuntimeEventAt: yield* nowIso,
+          },
+        });
+      }),
+    ).pipe(Effect.asVoid);
     yield* analytics.record("provider.sessions.stopped_all", {
       sessionCount: threadIds.length,
     });
@@ -1007,7 +1061,9 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
   yield* Effect.addFinalizer(() =>
     runStopAll().pipe(
       Effect.catchCause((cause) =>
-        Effect.logWarning("failed to stop provider service", { cause: Cause.pretty(cause) }),
+        Effect.logWarning("failed to stop provider service", {
+          errorTag: causeErrorTag(cause),
+        }),
       ),
     ),
   );
@@ -1026,14 +1082,17 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
     // Each access creates a fresh PubSub subscription so that multiple
     // consumers (ProviderRuntimeIngestion, CheckpointReactor, etc.) each
     // independently receive all runtime events.
-    get streamEvents(): ProviderServiceShape["streamEvents"] {
+    get streamEvents(): ProviderServiceMethod<"streamEvents"> {
       return Stream.fromPubSub(runtimeEventPubSub);
     },
-  } satisfies ProviderServiceShape;
+  } satisfies ProviderService.ProviderService["Service"];
 });
 
-export const ProviderServiceLive = Layer.effect(ProviderService, makeProviderService());
+export const ProviderServiceLive = Layer.effect(
+  ProviderService.ProviderService,
+  makeProviderService(),
+);
 
 export function makeProviderServiceLive(options?: ProviderServiceLiveOptions) {
-  return Layer.effect(ProviderService, makeProviderService(options));
+  return Layer.effect(ProviderService.ProviderService, makeProviderService(options));
 }
