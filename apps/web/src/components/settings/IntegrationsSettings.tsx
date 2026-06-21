@@ -151,7 +151,7 @@ function AccountDialog({
       setError(`${definition.baseUrlLabel ?? "Base URL"} must be a valid URL.`);
       return null;
     }
-  }, [baseUrl, definition.baseUrlLabel, requiresBaseUrl]);
+  }, [baseUrl, definition.baseUrlLabel, requiresBaseUrl, state.account?.baseUrl]);
 
   const handleNext = useCallback(() => {
     setError(null);
@@ -283,6 +283,8 @@ function AccountDialog({
     validateBaseUrl,
     validateName,
   ]);
+
+  const reviewBaseUrl = preserveSavedBaseUrl ? state.account?.baseUrl : baseUrl.trim();
 
   const submitLabel = preserveSavedToken
     ? "Save changes"
@@ -416,7 +418,7 @@ function AccountDialog({
                 {requiresBaseUrl ? (
                   <div className="rounded-md border border-border/70 bg-background px-3 py-2 sm:col-span-2">
                     <dt className="text-muted-foreground">Base URL</dt>
-                    <dd className="font-medium text-foreground">{baseUrl.trim() || "Not set"}</dd>
+                    <dd className="font-medium text-foreground">{reviewBaseUrl || "Not set"}</dd>
                   </div>
                 ) : null}
               </dl>
