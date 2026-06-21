@@ -211,27 +211,34 @@ function AccountDialog({
 
     try {
       setIsTesting(true);
-      if (!preserveSavedToken) {
-        const result = await testIntegrationToken({
-          environmentId,
-          input: {
-            kind: state.kind,
-            accountName: trimmedName,
-            ...(normalizedBaseUrl !== null ? { baseUrl: normalizedBaseUrl } : {}),
-            apiKey: trimmedKey,
-          },
-        });
+      const result = await testIntegrationToken({
+        environmentId,
+        input: preserveSavedToken
+          ? {
+              kind: state.kind,
+              accountId: state.account?.id,
+              accountName: trimmedName,
+              ...(normalizedBaseUrl !== null ? { baseUrl: normalizedBaseUrl } : {}),
+              useStoredToken: true,
+            }
+          : {
+              kind: state.kind,
+              accountId: state.account?.id,
+              accountName: trimmedName,
+              ...(normalizedBaseUrl !== null ? { baseUrl: normalizedBaseUrl } : {}),
+              apiKey: trimmedKey,
+            },
+      });
 
-        if (result._tag !== "Success") {
-          throw new Error("Could not verify the token.");
-        }
-
-        toastManager.add({
-          type: "success",
-          title: `${INTEGRATION_DISPLAY_NAMES[state.kind]} token verified`,
-          description: `Connected to ${result.value.accountLabel}.`,
-        });
+      if (result._tag !== "Success") {
+        throw new Error("Could not verify the token.");
       }
+
+      toastManager.add({
+        type: "success",
+        title: `${INTEGRATION_DISPLAY_NAMES[state.kind]} token verified`,
+        description: `Connected to ${result.value.accountLabel}.`,
+      });
 
       const existing = state.account;
       const nextId =

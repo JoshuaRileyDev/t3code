@@ -49,6 +49,7 @@ import {
   AssetWorkspaceContextNotFoundError,
   AssetWorkspaceContextResolutionError,
   EnvironmentAuthorizationError,
+  IntegrationAccountTokenValidationError,
   ThreadId,
   type TerminalAttachStreamEvent,
   type TerminalError,
@@ -1231,7 +1232,54 @@ const makeWsRpcLayer = (currentSession: EnvironmentAuth.AuthenticatedSession) =>
         [WS_METHODS.serverTestIntegrationToken]: (input) =>
           observeRpcEffect(
             WS_METHODS.serverTestIntegrationToken,
-            Integrations.testIntegrationToken(input),
+            Effect.gen(function* () {
+              if ((input.useStoredToken ?? false) || input.apiKey === undefined) {
+                if (input.accountId === undefined) {
+                  return yield* Effect.fail(
+                    new IntegrationAccountTokenValidationError({
+                      kind: input.kind,
+                      detail: "An account id is required to retest a stored token.",
+                    }),
+                  );
+                }
+
+                const settings = yield* serverSettings.getSettings;
+                const accounts = settings.integrations[input.kind];
+                const account = accounts.find((candidate) => candidate.id === input.accountId);
+                if (account === undefined) {
+                  return yield* Effect.fail(
+                    new IntegrationAccountTokenValidationError({
+                      kind: input.kind,
+                      detail: "Stored integration account not found.",
+                    }),
+                  );
+                }
+
+                if (account.apiKey.length === 0) {
+                  return yield* Effect.fail(
+                    new IntegrationAccountTokenValidationError({
+                      kind: input.kind,
+                      detail: "Stored integration token is unavailable.",
+                    }),
+                  );
+                }
+
+                return yield* Integrations.testIntegrationToken({
+                  kind: input.kind,
+                  accountName: input.accountName ?? account.name,
+                  ...(input.baseUrl !== undefined ? { baseUrl: input.baseUrl } : {}),
+                  apiKey: account.apiKey,
+                });
+              }
+
+              return yield* Integrations.testIntegrationToken({
+                kind: input.kind,
+                ...(input.accountId !== undefined ? { accountId: input.accountId } : {}),
+                ...(input.accountName !== undefined ? { accountName: input.accountName } : {}),
+                ...(input.baseUrl !== undefined ? { baseUrl: input.baseUrl } : {}),
+                apiKey: input.apiKey,
+              });
+            }),
             {
               "rpc.aggregate": "server",
             },

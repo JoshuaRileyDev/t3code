@@ -127,9 +127,11 @@ export const DEFAULT_INTEGRATIONS_SETTINGS: IntegrationsSettings = Schema.decode
 
 export const IntegrationAccountTokenValidationInput = Schema.Struct({
   kind: IntegrationKind,
+  accountId: Schema.optionalKey(IntegrationAccountId),
   accountName: Schema.optionalKey(TrimmedString),
   baseUrl: Schema.optionalKey(TrimmedString),
-  apiKey: TrimmedNonEmptyString,
+  apiKey: Schema.optionalKey(TrimmedNonEmptyString),
+  useStoredToken: Schema.optionalKey(Schema.Boolean),
 });
 export type IntegrationAccountTokenValidationInput =
   typeof IntegrationAccountTokenValidationInput.Type;

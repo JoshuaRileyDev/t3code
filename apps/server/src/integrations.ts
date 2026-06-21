@@ -189,6 +189,11 @@ export const testIntegrationToken = (
   HttpClient.HttpClient
 > =>
   Effect.gen(function* () {
+    if (input.apiKey === undefined) {
+      return yield* Effect.fail(
+        validationError(input, "An API key is required to test the token."),
+      );
+    }
     const httpClient = yield* HttpClient.HttpClient;
     return yield* INTEGRATION_VALIDATORS[input.kind](input, httpClient);
   });
