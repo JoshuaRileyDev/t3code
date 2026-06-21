@@ -294,17 +294,17 @@ export const make = Effect.gen(function* () {
 
   const get: ServerSecretStore["Service"]["get"] = (name) =>
     fileSystem.readFile(resolveSecretPath(name)).pipe(
-      Effect.map((bytes) => Option.some(decryptSecretBytes(encryptionKey, bytes))),
-      Effect.catch((cause) =>
-        cause.reason._tag === "NotFound"
-          ? Effect.succeed(Option.none())
-          : Effect.fail(
-              new SecretStoreReadError({
-                resource: `secret ${name}`,
-                cause,
-              }),
-            ),
+      Effect.flatMap((bytes) =>
+        Effect.try({
+          try: () => Option.some(decryptSecretBytes(encryptionKey, bytes)),
+          catch: (cause) =>
+            new SecretStoreReadError({
+              resource: `secret ${name}`,
+              cause,
+            }),
+        }),
       ),
+      Effect.catchIf((cause) => cause.reason._tag === "NotFound", () => Effect.succeed(Option.none())),
       Effect.withSpan("ServerSecretStore.get"),
     );
 

@@ -245,6 +245,22 @@ it.layer(NodeServices.layer)("ServerSecretStore.layer", (it) => {
     }).pipe(Effect.provide(makeServerSecretStoreLayer())),
   );
 
+  it.effect("returns a read error when the secret payload cannot be decrypted", () =>
+    Effect.gen(function* () {
+      const serverConfig = yield* ServerConfig.ServerConfig;
+      const fileSystem = yield* FileSystem.FileSystem;
+      const secretStore = yield* ServerSecretStore.ServerSecretStore;
+      const secretPath = NodePath.join(serverConfig.secretsDir, "session-signing-key.bin");
+
+      yield* fileSystem.writeFile(secretPath, Uint8Array.from([0, 1, 2, 3]));
+
+      const error = yield* Effect.flip(secretStore.get("session-signing-key"));
+
+      assert.instanceOf(error, ServerSecretStore.SecretStoreReadError);
+      assert.include(error.message, "Failed to read secret session-signing-key.");
+    }).pipe(Effect.provide(makeServerSecretStoreLayer())),
+  );
+
   it.effect("propagates read failures other than missing-file errors", () =>
     Effect.gen(function* () {
       const secretStore = yield* ServerSecretStore.ServerSecretStore;

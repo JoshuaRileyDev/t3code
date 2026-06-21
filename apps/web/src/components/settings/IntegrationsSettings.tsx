@@ -216,6 +216,7 @@ function AccountDialog({
           environmentId,
           input: {
             kind: state.kind,
+            accountName: trimmedName,
             ...(normalizedBaseUrl !== null ? { baseUrl: normalizedBaseUrl } : {}),
             apiKey: trimmedKey,
           },

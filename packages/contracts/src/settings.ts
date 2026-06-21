@@ -80,7 +80,7 @@ export const INTEGRATION_DEFINITIONS: Record<IntegrationKind, IntegrationDefinit
   },
   jira: {
     accountPlaceholder: "Issue tracking",
-    accountHint: "Connect a Jira API token for issue tracking.",
+    accountHint: "Use your Jira email or username with the API token.",
     tokenLabel: "API token",
     baseUrlLabel: "Jira URL",
     baseUrlPlaceholder: "https://your-domain.atlassian.net",
@@ -127,6 +127,7 @@ export const DEFAULT_INTEGRATIONS_SETTINGS: IntegrationsSettings = Schema.decode
 
 export const IntegrationAccountTokenValidationInput = Schema.Struct({
   kind: IntegrationKind,
+  accountName: Schema.optionalKey(TrimmedString),
   baseUrl: Schema.optionalKey(TrimmedString),
   apiKey: TrimmedNonEmptyString,
 });

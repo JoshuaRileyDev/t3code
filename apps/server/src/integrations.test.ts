@@ -6,18 +6,22 @@ import { type IntegrationAccountTokenValidationInput } from "@t3tools/contracts"
 
 import { testIntegrationToken } from "./integrations.ts";
 
-function makeHttpClient(response: Response) {
+function makeHttpClient(response: Response, onRequest?: (request: any) => void) {
   return HttpClient.make((request) =>
-    Effect.succeed(HttpClientResponse.fromWeb(request, response)),
+    Effect.sync(() => {
+      onRequest?.(request);
+      return HttpClientResponse.fromWeb(request, response);
+    }),
   );
 }
 
 function provideHttpClient<T extends IntegrationAccountTokenValidationInput>(
   input: T,
   response: Response,
+  onRequest?: (request: any) => void,
 ) {
   return testIntegrationToken(input).pipe(
-    Effect.provideService(HttpClient.HttpClient, makeHttpClient(response)),
+    Effect.provideService(HttpClient.HttpClient, makeHttpClient(response, onRequest)),
   );
 }
 
@@ -49,6 +53,7 @@ describe("testIntegrationToken", () => {
       const result = yield* provideHttpClient(
         {
           kind: "jira",
+          accountName: "jira@example.test",
           baseUrl: "https://jira.example.test",
           apiKey: "jira_token",
         },
@@ -56,6 +61,11 @@ describe("testIntegrationToken", () => {
           { displayName: "Jira User", emailAddress: "jira@example.test" },
           { status: 200 },
         ),
+        (request) => {
+          expect(request.headers.authorization).toBe(
+            `Basic ${Buffer.from("jira@example.test:jira_token").toString("base64")}`,
+          );
+        },
       );
 
       expect(result.accountLabel).toBe("Jira User");

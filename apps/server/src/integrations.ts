@@ -118,8 +118,14 @@ const INTEGRATION_VALIDATORS: Record<
       );
     }
 
+    if (input.accountName === undefined || input.accountName.length === 0) {
+      return Effect.fail(
+        validationError(input, "Jira requires an account name before testing the token."),
+      );
+    }
+
     const request = HttpClientRequest.get(makeUrl(input.baseUrl, "/rest/api/3/myself")).pipe(
-      HttpClientRequest.bearerToken(input.apiKey),
+      HttpClientRequest.basicAuth(input.accountName, input.apiKey),
       HttpClientRequest.acceptJson,
     );
 

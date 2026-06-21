@@ -645,4 +645,55 @@ it.layer(NodeServices.layer)("server settings", (it) => {
       );
     }).pipe(Effect.provide(makeServerSettingsLayer())),
   );
+
+  it.effect("migrates plaintext integration keys into the secret store on save", () =>
+    Effect.gen(function* () {
+      const serverSettings = yield* ServerSettingsModule.ServerSettingsService;
+      const serverConfig = yield* ServerConfig.ServerConfig;
+      const fileSystem = yield* FileSystem.FileSystem;
+
+      const next = yield* serverSettings.updateSettings({
+        integrations: {
+          github: [
+            {
+              id: IntegrationAccountId.make("github_legacy_plaintext"),
+              name: "Legacy",
+              apiKey: "ghp_legacy_secret",
+            },
+          ],
+          gitlab: [],
+          jira: [],
+          linear: [],
+        },
+      });
+
+      assert.deepEqual(next.integrations.github[0], {
+        id: IntegrationAccountId.make("github_legacy_plaintext"),
+        name: "Legacy",
+        apiKey: "ghp_legacy_secret",
+        apiKeyRedacted: true,
+      });
+
+      const raw = yield* fileSystem.readFileString(serverConfig.settingsPath);
+      assert.notInclude(raw, "ghp_legacy_secret");
+      // @effect-diagnostics-next-line preferSchemaOverJson:off
+      assert.deepEqual(JSON.parse(raw).integrations.github, [
+        {
+          id: IntegrationAccountId.make("github_legacy_plaintext"),
+          name: "Legacy",
+          apiKey: "",
+          apiKeyRedacted: true,
+        },
+      ]);
+
+      assert.deepEqual(ServerSettingsModule.redactServerSettingsForClient(next).integrations.github, [
+        {
+          id: IntegrationAccountId.make("github_legacy_plaintext"),
+          name: "Legacy",
+          apiKey: "",
+          apiKeyRedacted: true,
+        },
+      ]);
+    }).pipe(Effect.provide(makeServerSettingsLayer())),
+  );
 });

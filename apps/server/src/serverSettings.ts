@@ -103,7 +103,7 @@ function redactProviderEnvironmentVariable(
 }
 
 function redactIntegrationAccount(account: IntegrationAccount): IntegrationAccount {
-  if (!account.apiKeyRedacted) {
+  if (!account.apiKeyRedacted && account.apiKey.length === 0) {
     const { apiKeyRedacted: _omit, ...rest } = account;
     return rest;
   }
@@ -556,22 +556,6 @@ const make = Effect.gen(function* () {
         const persistedAccounts: IntegrationAccount[] = [];
         for (const account of accounts) {
           const secretName = integrationAccountSecretName({ kind, accountId: account.id });
-          if (!account.apiKeyRedacted) {
-            yield* secretStore.remove(secretName).pipe(
-              Effect.mapError(
-                (cause) =>
-                  new ServerSettingsError({
-                    settingsPath,
-                    operation: "remove-secret",
-                    cause,
-                  }),
-              ),
-            );
-            persistedAccounts.push(redactIntegrationAccount(account));
-            continue;
-          }
-
-          nextSecretKeys.add(secretName);
           if (account.apiKey.length > 0) {
             yield* secretStore.set(secretName, textEncoder.encode(account.apiKey)).pipe(
               Effect.mapError(
@@ -583,10 +567,27 @@ const make = Effect.gen(function* () {
                   }),
               ),
             );
-            persistedAccounts.push({ ...account, apiKey: "", apiKeyRedacted: true });
-          } else {
+            nextSecretKeys.add(secretName);
             persistedAccounts.push(redactIntegrationAccount(account));
+            continue;
           }
+
+          if (!account.apiKeyRedacted) {
+            yield* secretStore.remove(secretName).pipe(
+              Effect.mapError(
+                (cause) =>
+                  new ServerSettingsError({
+                    settingsPath,
+                    operation: "remove-secret",
+                    cause,
+                  }),
+              ),
+            );
+          } else {
+            nextSecretKeys.add(secretName);
+          }
+
+          persistedAccounts.push(redactIntegrationAccount(account));
         }
         integrations[kind] = persistedAccounts;
       }
