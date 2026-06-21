@@ -649,7 +649,14 @@ export const ServerSettingsPatch = Schema.Struct({
   // patches risk leaving driver-specific config in a half-merged state.
   // The web UI sends a fully-formed map every time it edits this field.
   providerInstances: Schema.optionalKey(Schema.Record(ProviderInstanceId, ProviderInstanceConfig)),
-  integrations: Schema.optionalKey(IntegrationsSettings),
+  integrations: Schema.optionalKey(
+    Schema.Struct({
+      github: Schema.optionalKey(Schema.Array(IntegrationAccount)),
+      gitlab: Schema.optionalKey(Schema.Array(IntegrationAccount)),
+      jira: Schema.optionalKey(Schema.Array(IntegrationAccount)),
+      linear: Schema.optionalKey(Schema.Array(IntegrationAccount)),
+    }),
+  ),
 });
 export type ServerSettingsPatch = typeof ServerSettingsPatch.Type;
 

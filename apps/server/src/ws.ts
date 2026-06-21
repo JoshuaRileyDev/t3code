@@ -1267,7 +1267,11 @@ const makeWsRpcLayer = (currentSession: EnvironmentAuth.AuthenticatedSession) =>
                 return yield* Integrations.testIntegrationToken({
                   kind: input.kind,
                   accountName: input.accountName ?? account.name,
-                  ...(input.baseUrl !== undefined ? { baseUrl: input.baseUrl } : {}),
+                  ...(input.baseUrl !== undefined
+                    ? { baseUrl: input.baseUrl }
+                    : account.baseUrl !== undefined
+                      ? { baseUrl: account.baseUrl }
+                      : {}),
                   apiKey: account.apiKey,
                 });
               }

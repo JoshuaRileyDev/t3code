@@ -304,7 +304,10 @@ export const make = Effect.gen(function* () {
             }),
         }),
       ),
-      Effect.catchIf((cause) => cause.reason?._tag === "NotFound", () => Effect.succeed(Option.none())),
+      Effect.catchIf(
+        (cause) => cause.reason?._tag === "NotFound",
+        () => Effect.succeed(Option.none()),
+      ),
       Effect.withSpan("ServerSecretStore.get"),
     );
 

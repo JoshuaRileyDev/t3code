@@ -686,14 +686,17 @@ it.layer(NodeServices.layer)("server settings", (it) => {
         },
       ]);
 
-      assert.deepEqual(ServerSettingsModule.redactServerSettingsForClient(next).integrations.github, [
-        {
-          id: IntegrationAccountId.make("github_legacy_plaintext"),
-          name: "Legacy",
-          apiKey: "",
-          apiKeyRedacted: true,
-        },
-      ]);
+      assert.deepEqual(
+        ServerSettingsModule.redactServerSettingsForClient(next).integrations.github,
+        [
+          {
+            id: IntegrationAccountId.make("github_legacy_plaintext"),
+            name: "Legacy",
+            apiKey: "",
+            apiKeyRedacted: true,
+          },
+        ],
+      );
     }).pipe(Effect.provide(makeServerSettingsLayer())),
   );
 });
