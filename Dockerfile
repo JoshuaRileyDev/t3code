@@ -7,7 +7,7 @@ RUN apt-get update \
   && apt-get install -y --no-install-recommends bash curl ca-certificates \
   && rm -rf /var/lib/apt/lists/* \
   && corepack enable \
-  && curl -fsSL https://vite.plus | bash
+  && npm install -g vite-plus
 
 FROM base AS build
 COPY . .

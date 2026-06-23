@@ -1,0 +1,12 @@
+.git
+.repos
+node_modules
+**/node_modules
+apps/**/dist
+apps/**/dist-electron
+packages/**/dist
+.vite-plus
+apps/**/.vite-plus
+packages/**/.vite-plus
+release
+*.log
