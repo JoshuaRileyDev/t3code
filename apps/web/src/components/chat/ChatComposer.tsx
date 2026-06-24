@@ -78,6 +78,9 @@ import { ComposerPendingUserInputPanel } from "./ComposerPendingUserInputPanel";
 import { ComposerPlanFollowUpBanner } from "./ComposerPlanFollowUpBanner";
 import { resolveComposerMenuActiveItemId } from "./composerMenuHighlight";
 import { searchSlashCommandItems } from "./composerSlashCommandSearch";
+import { buildComposerSlashCommandItems } from "./composerSlashCommands";
+import { collectComposerSlashCommands } from "~/lib/composerSlashCommands";
+import { isAgentsSkillPath } from "~/providerSkillPresentation";
 import {
   getComposerPromptInjectionState,
   getComposerProviderState,
@@ -796,6 +799,17 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     () => selectedProviderEntry?.snapshot ?? null,
     [selectedProviderEntry],
   );
+  const composerSlashCommands = useMemo(
+    () =>
+      collectComposerSlashCommands(
+        providerInstanceEntries.map((entry) => entry.snapshot),
+        {
+          hiddenSlashCommandsByProvider: settings.hiddenProviderSlashCommands,
+          customSlashCommands: settings.customSlashCommands,
+        },
+      ),
+    [providerInstanceEntries, settings.customSlashCommands, settings.hiddenProviderSlashCommands],
+  );
   const selectedProviderModels = useMemo<ReadonlyArray<ServerProvider["models"][number]>>(
     () => selectedProviderEntry?.models ?? [],
     [selectedProviderEntry],
@@ -882,7 +896,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
   // Composer-local state
   // ------------------------------------------------------------------
   const [composerCursor, setComposerCursor] = useState(() =>
-    collapseExpandedComposerCursor(prompt, prompt.length),
+    collapseExpandedComposerCursor(prompt, prompt.length, composerSlashCommands),
   );
   const [composerTrigger, setComposerTrigger] = useState<ComposerTrigger | null>(() =>
     detectComposerTrigger(prompt, prompt.length),
@@ -965,63 +979,57 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       }));
     }
     if (composerTrigger.kind === "slash-command") {
-      const builtInSlashCommandItems = [
-        {
-          id: "slash:model",
-          type: "slash-command",
-          command: "model",
-          label: "/model",
-          description: "Switch response model for this thread",
-        },
-        {
-          id: "slash:plan",
-          type: "slash-command",
-          command: "plan",
-          label: "/plan",
-          description: "Switch this thread into plan mode",
-        },
-        {
-          id: "slash:default",
-          type: "slash-command",
-          command: "default",
-          label: "/default",
-          description: "Switch this thread back to normal build mode",
-        },
-      ] satisfies ReadonlyArray<Extract<ComposerCommandItem, { type: "slash-command" }>>;
-      const providerSlashCommandItems = (selectedProviderStatus?.slashCommands ?? []).map(
-        (command) => ({
-          id: `provider-slash-command:${selectedProvider}:${command.name}`,
-          type: "provider-slash-command" as const,
-          provider: selectedProvider,
-          command,
-          label: `/${command.name}`,
-          description: command.description ?? command.input?.hint ?? "Run provider command",
-        }),
+      const slashCommandItems = buildComposerSlashCommandItems(
+        providerInstanceEntries,
+        settings.hiddenProviderSlashCommands,
+        settings.customSlashCommands,
+        settings.hiddenCustomSlashCommands,
+        settings.hiddenGlobalSlashCommands,
       );
       const query = composerTrigger.query.trim().toLowerCase();
-      const slashCommandItems = [...builtInSlashCommandItems, ...providerSlashCommandItems];
       if (!query) {
         return slashCommandItems;
       }
       return searchSlashCommandItems(slashCommandItems, query);
     }
     if (composerTrigger.kind === "skill") {
-      return searchProviderSkills(selectedProviderStatus?.skills ?? [], composerTrigger.query).map(
-        (skill) => ({
-          id: `skill:${selectedProvider}:${skill.name}`,
-          type: "skill" as const,
-          provider: selectedProvider,
-          skill,
-          label: formatProviderSkillDisplayName(skill),
-          description:
-            skill.shortDescription ??
-            skill.description ??
-            (skill.scope ? `${skill.scope} skill` : "Run provider skill"),
-        }),
-      );
+      const filteredSkills = new Map<string, ComposerCommandItem>();
+      for (const provider of providerInstanceEntries) {
+        const matchingSkills = searchProviderSkills(
+          provider.snapshot.skills ?? [],
+          composerTrigger.query,
+        );
+        for (const skill of matchingSkills) {
+          const dedupeKey =
+            skill.path.trim().toLowerCase() || `${provider.instanceId}:${skill.name}`;
+          if (filteredSkills.has(dedupeKey)) {
+            continue;
+          }
+          filteredSkills.set(dedupeKey, {
+            id: `skill:${provider.instanceId}:${skill.name}`,
+            type: "skill" as const,
+            provider: provider.driverKind,
+            skill,
+            ...(isAgentsSkillPath(skill.path) ? { sourceKind: "agents" as const } : {}),
+            label: formatProviderSkillDisplayName(skill),
+            description:
+              skill.shortDescription ??
+              skill.description ??
+              (skill.scope ? `${skill.scope} skill` : "Run provider skill"),
+          });
+        }
+      }
+      return [...filteredSkills.values()];
     }
     return [];
-  }, [composerTrigger, selectedProvider, selectedProviderStatus, workspaceEntries.entries]);
+  }, [
+    composerTrigger,
+    providerInstanceEntries,
+    selectedProviderStatus,
+    settings.customSlashCommands,
+    settings.hiddenProviderSlashCommands,
+    workspaceEntries.entries,
+  ]);
 
   const composerMenuOpen = Boolean(composerTrigger);
   const composerMenuSearchKey = composerTrigger
@@ -1107,7 +1115,11 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       }
       promptRef.current = nextPrompt;
       setComposerDraftPrompt(composerDraftTarget, nextPrompt);
-      const nextCursor = collapseExpandedComposerCursor(nextPrompt, nextPrompt.length);
+      const nextCursor = collapseExpandedComposerCursor(
+        nextPrompt,
+        nextPrompt.length,
+        composerSlashCommands,
+      );
       setComposerCursor(nextCursor);
       setComposerTrigger(detectComposerTrigger(nextPrompt, nextPrompt.length));
       scheduleComposerFocus();
@@ -1201,7 +1213,11 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       promptRef.current = removal.prompt;
       setPrompt(removal.prompt);
       removeComposerDraftTerminalContext(composerDraftTarget, contextId);
-      const nextCursor = collapseExpandedComposerCursor(removal.prompt, removal.cursor);
+      const nextCursor = collapseExpandedComposerCursor(
+        removal.prompt,
+        removal.cursor,
+        composerSlashCommands,
+      );
       setComposerCursor(nextCursor);
       setComposerTrigger(detectComposerTrigger(removal.prompt, removal.cursor));
     },
@@ -1219,8 +1235,10 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
   // ------------------------------------------------------------------
   useEffect(() => {
     promptRef.current = prompt;
-    setComposerCursor((existing) => clampCollapsedComposerCursor(prompt, existing));
-  }, [prompt, promptRef]);
+    setComposerCursor((existing) =>
+      clampCollapsedComposerCursor(prompt, existing, composerSlashCommands),
+    );
+  }, [composerSlashCommands, prompt, promptRef]);
 
   useEffect(() => {
     composerImagesRef.current = composerImages;
@@ -1292,12 +1310,16 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     }
 
     promptRef.current = nextCustomAnswer;
-    const nextCursor = collapseExpandedComposerCursor(nextCustomAnswer, nextCustomAnswer.length);
+    const nextCursor = collapseExpandedComposerCursor(
+      nextCustomAnswer,
+      nextCustomAnswer.length,
+      composerSlashCommands,
+    );
     setComposerCursor(nextCursor);
     setComposerTrigger(
       detectComposerTrigger(
         nextCustomAnswer,
-        expandCollapsedComposerCursor(nextCustomAnswer, nextCursor),
+        expandCollapsedComposerCursor(nextCustomAnswer, nextCursor, composerSlashCommands),
       ),
     );
     setComposerHighlightedItemId(null);
@@ -1313,7 +1335,13 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
   // ------------------------------------------------------------------
   useEffect(() => {
     setComposerHighlightedItemId(null);
-    setComposerCursor(collapseExpandedComposerCursor(promptRef.current, promptRef.current.length));
+    setComposerCursor(
+      collapseExpandedComposerCursor(
+        promptRef.current,
+        promptRef.current.length,
+        composerSlashCommands,
+      ),
+    );
     setComposerTrigger(detectComposerTrigger(promptRef.current, promptRef.current.length));
     dragDepthRef.current = 0;
     setIsDragOverComposer(false);
@@ -1503,8 +1531,16 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
         return false;
       }
       const next = replaceTextRange(promptRef.current, rangeStart, rangeEnd, replacement);
-      const nextCursor = collapseExpandedComposerCursor(next.text, next.cursor);
-      const nextExpandedCursor = expandCollapsedComposerCursor(next.text, nextCursor);
+      const nextCursor = collapseExpandedComposerCursor(
+        next.text,
+        next.cursor,
+        composerSlashCommands,
+      );
+      const nextExpandedCursor = expandCollapsedComposerCursor(
+        next.text,
+        nextCursor,
+        composerSlashCommands,
+      );
       promptRef.current = next.text;
       const activePendingQuestion = activePendingProgress?.activeQuestion;
       if (activePendingQuestion && activePendingUserInput) {
@@ -1549,7 +1585,11 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     return {
       value: promptRef.current,
       cursor: composerCursor,
-      expandedCursor: expandCollapsedComposerCursor(promptRef.current, composerCursor),
+      expandedCursor: expandCollapsedComposerCursor(
+        promptRef.current,
+        composerCursor,
+        composerSlashCommands,
+      ),
       terminalContextIds: composerTerminalContexts.map((context) => context.id),
     };
   }, [composerCursor, composerTerminalContexts, promptRef]);
@@ -1977,14 +2017,18 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
         detectTrigger?: boolean;
       }) => {
         const promptForState = options?.prompt ?? promptRef.current;
-        const cursor = clampCollapsedComposerCursor(promptForState, options?.cursor ?? 0);
+        const cursor = clampCollapsedComposerCursor(
+          promptForState,
+          options?.cursor ?? 0,
+          composerSlashCommands,
+        );
         setComposerHighlightedItemId(null);
         setComposerCursor(cursor);
         setComposerTrigger(
           options?.detectTrigger
             ? detectComposerTrigger(
                 promptForState,
-                expandCollapsedComposerCursor(promptForState, cursor),
+                expandCollapsedComposerCursor(promptForState, cursor, composerSlashCommands),
               )
             : null,
         );
@@ -1994,7 +2038,11 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
         const snapshot = composerEditorRef.current?.readSnapshot() ?? {
           value: promptRef.current,
           cursor: composerCursor,
-          expandedCursor: expandCollapsedComposerCursor(promptRef.current, composerCursor),
+          expandedCursor: expandCollapsedComposerCursor(
+            promptRef.current,
+            composerCursor,
+            composerSlashCommands,
+          ),
           terminalContextIds: composerTerminalContexts.map((context) => context.id),
         };
         const insertion = insertInlineTerminalContextPlaceholder(
@@ -2004,6 +2052,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
         const nextCollapsedCursor = collapseExpandedComposerCursor(
           insertion.prompt,
           insertion.cursor,
+          composerSlashCommands,
         );
         const inserted = insertComposerDraftTerminalContext(
           composerDraftTarget,
@@ -2279,10 +2328,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                   resolvedTheme={resolvedTheme}
                   isLoading={isComposerMenuLoading}
                   triggerKind={composerTriggerKind}
-                  groupSlashCommandSections={
-                    composerTrigger?.kind === "slash-command" &&
-                    composerTrigger.query.trim().length === 0
-                  }
+                  groupSlashCommandSections={composerTrigger?.kind === "slash-command"}
                   emptyStateText={composerMenuEmptyState}
                   activeItemId={activeComposerMenuItem?.id ?? null}
                   onHighlightedItemChange={onComposerMenuItemHighlighted}
@@ -2430,6 +2476,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                     : []
                 }
                 skills={selectedProviderStatus?.skills ?? []}
+                slashCommands={composerSlashCommands}
                 {...(showMobilePendingAnswerActions ? { className: "max-sm:pb-11" } : {})}
                 onRemoveTerminalContext={removeComposerTerminalContextFromDraft}
                 onChange={onPromptChange}
