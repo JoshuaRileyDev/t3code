@@ -315,6 +315,7 @@ const RPC_REQUIRED_SCOPE = new Map<string, AuthEnvironmentScope>([
   [WS_METHODS.vcsListRefs, AuthOrchestrationReadScope],
   [WS_METHODS.vcsCreateWorktree, AuthOrchestrationOperateScope],
   [WS_METHODS.vcsRemoveWorktree, AuthOrchestrationOperateScope],
+  [WS_METHODS.vcsDeleteRef, AuthOrchestrationOperateScope],
   [WS_METHODS.vcsCreateRef, AuthOrchestrationOperateScope],
   [WS_METHODS.vcsSwitchRef, AuthOrchestrationOperateScope],
   [WS_METHODS.vcsInit, AuthOrchestrationOperateScope],
@@ -1531,6 +1532,12 @@ const makeWsRpcLayer = (currentSession: EnvironmentAuth.AuthenticatedSession) =>
           observeRpcEffect(
             WS_METHODS.vcsRemoveWorktree,
             gitWorkflow.removeWorktree(input).pipe(Effect.tap(() => refreshGitStatus(input.cwd))),
+            { "rpc.aggregate": "vcs" },
+          ),
+        [WS_METHODS.vcsDeleteRef]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.vcsDeleteRef,
+            gitWorkflow.deleteRef(input).pipe(Effect.tap(() => refreshGitStatus(input.cwd))),
             { "rpc.aggregate": "vcs" },
           ),
         [WS_METHODS.vcsCreateRef]: (input) =>

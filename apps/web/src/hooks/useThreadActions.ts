@@ -22,7 +22,11 @@ import { readLocalApi } from "../localApi";
 import { readEnvironmentThreadRefs, readProject, readThreadShell } from "../state/entities";
 import { useTerminalUiStateStore } from "../terminalUiStateStore";
 import { buildThreadRouteParams, resolveThreadRouteRef } from "../threadRoutes";
-import { formatWorktreePathForDisplay, getOrphanedWorktreePathForThread } from "../worktreeCleanup";
+import {
+  formatWorktreePathForDisplay,
+  getOrphanedBranchNameForThread,
+  getOrphanedWorktreePathForThread,
+} from "../worktreeCleanup";
 import { stackedThreadToast, toastManager } from "../components/ui/toast";
 import { useClientSettings } from "./useSettings";
 import { useAtomCommand } from "../state/use-atom-command";
@@ -52,6 +56,9 @@ export function useThreadActions() {
   });
   const stopThreadSession = useAtomCommand(threadEnvironment.stopSession);
   const removeWorktree = useAtomCommand(vcsEnvironment.removeWorktree, {
+    reportFailure: false,
+  });
+  const deleteRef = useAtomCommand(vcsEnvironment.deleteRef, {
     reportFailure: false,
   });
   const refreshVcsStatus = useAtomCommand(vcsEnvironment.refreshStatus, {
@@ -108,6 +115,17 @@ export function useThreadActions() {
       const shouldNavigateToDraft =
         currentRouteThreadRef?.threadId === threadRef.threadId &&
         currentRouteThreadRef.environmentId === threadRef.environmentId;
+
+      const threads = readEnvironmentThreadRefs(threadRef.environmentId).flatMap((ref) => {
+        const shell = readThreadShell(ref);
+        return shell === null ? [] : [shell];
+      });
+      const threadProject = readProject({
+        environmentId: threadRef.environmentId,
+        projectId: thread.projectId,
+      });
+      const orphanedWorktreePath = getOrphanedWorktreePathForThread(threads, threadRef.threadId);
+      const orphanedBranchName = getOrphanedBranchNameForThread(threads, threadRef.threadId);
       const archiveResult = await archiveThreadMutation({
         environmentId: threadRef.environmentId,
         input: { threadId: threadRef.threadId },
@@ -124,13 +142,105 @@ export function useThreadActions() {
           return navigationResult;
         }
         refreshArchivedThreadsForEnvironment(threadRef.environmentId);
-        return archiveResult;
       }
 
       refreshArchivedThreadsForEnvironment(threadRef.environmentId);
+
+      if (!threadProject || (!orphanedWorktreePath && !orphanedBranchName)) {
+        return archiveResult;
+      }
+
+      if (thread.session && thread.session.status !== "stopped") {
+        await stopThreadSession({
+          environmentId: threadRef.environmentId,
+          input: { threadId: threadRef.threadId },
+        });
+      }
+
+      await closeTerminal({
+        environmentId: threadRef.environmentId,
+        input: { threadId: threadRef.threadId, deleteHistory: true },
+      });
+
+      if (orphanedWorktreePath) {
+        const removeResult = await removeWorktree({
+          environmentId: threadRef.environmentId,
+          input: {
+            cwd: threadProject.workspaceRoot,
+            path: orphanedWorktreePath,
+            force: true,
+          },
+        });
+        if (removeResult._tag === "Failure") {
+          const error = squashAtomCommandFailure(removeResult);
+          const message =
+            error instanceof Error ? error.message : "Unknown error removing worktree.";
+          console.error("Failed to remove orphaned worktree after thread archive", {
+            threadId: threadRef.threadId,
+            projectCwd: threadProject.workspaceRoot,
+            worktreePath: orphanedWorktreePath,
+            error,
+          });
+          toastManager.add(
+            stackedThreadToast({
+              type: "error",
+              title: "Thread archived, but worktree removal failed",
+              description: `Could not remove ${formatWorktreePathForDisplay(orphanedWorktreePath)}. ${message}`,
+            }),
+          );
+          return removeResult;
+        }
+        await refreshVcsStatus({
+          environmentId: threadRef.environmentId,
+          input: { cwd: threadProject.workspaceRoot },
+        });
+      }
+
+      if (orphanedBranchName) {
+        const deleteRefResult = await deleteRef({
+          environmentId: threadRef.environmentId,
+          input: {
+            cwd: threadProject.workspaceRoot,
+            refName: orphanedBranchName,
+            force: true,
+          },
+        });
+        if (deleteRefResult._tag === "Failure") {
+          const error = squashAtomCommandFailure(deleteRefResult);
+          const message = error instanceof Error ? error.message : "Unknown error deleting branch.";
+          console.error("Failed to delete orphaned branch after thread archive", {
+            threadId: threadRef.threadId,
+            projectCwd: threadProject.workspaceRoot,
+            branch: orphanedBranchName,
+            error,
+          });
+          toastManager.add(
+            stackedThreadToast({
+              type: "error",
+              title: "Thread archived, but branch removal failed",
+              description: `Could not remove branch ${orphanedBranchName}. ${message}`,
+            }),
+          );
+          return deleteRefResult;
+        }
+        await refreshVcsStatus({
+          environmentId: threadRef.environmentId,
+          input: { cwd: threadProject.workspaceRoot },
+        });
+      }
+
       return archiveResult;
     },
-    [archiveThreadMutation, getCurrentRouteThreadRef, resolveThreadTarget],
+    [
+      archiveThreadMutation,
+      closeTerminal,
+      deleteRef,
+      getCurrentRouteThreadRef,
+      refreshVcsStatus,
+      removeWorktree,
+      resolveThreadTarget,
+      stopThreadSession,
+    ],
   );
 
   const unarchiveThread = useCallback(
