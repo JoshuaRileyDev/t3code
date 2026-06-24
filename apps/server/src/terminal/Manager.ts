@@ -50,6 +50,7 @@ import * as Schema from "effect/Schema";
 import * as Scope from "effect/Scope";
 import * as Semaphore from "effect/Semaphore";
 import * as SynchronizedRef from "effect/SynchronizedRef";
+import { listLoginShellCandidates } from "@t3tools/shared/shell";
 
 import * as ServerConfig from "../config.ts";
 import {
@@ -440,7 +441,11 @@ function defaultShellResolver(platform: NodeJS.Platform, env: NodeJS.ProcessEnv)
   if (platform === "win32") {
     return "pwsh.exe";
   }
-  return env.SHELL ?? "bash";
+
+  return (
+    listLoginShellCandidates(platform, env.SHELL)[0] ??
+    (platform === "darwin" ? "/bin/zsh" : "/bin/bash")
+  );
 }
 
 function normalizeShellCommand(

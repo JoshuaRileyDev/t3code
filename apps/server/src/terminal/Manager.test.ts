@@ -24,11 +24,22 @@ import * as Ref from "effect/Ref";
 import * as Schedule from "effect/Schedule";
 import * as Scope from "effect/Scope";
 import * as TestClock from "effect/testing/TestClock";
-import { expect } from "vite-plus/test";
+import { expect, vi } from "vite-plus/test";
 
 import * as ProcessRunner from "../processRunner.ts";
 import * as TerminalManager from "./Manager.ts";
 import * as PtyAdapter from "./PtyAdapter.ts";
+
+vi.mock("node:os", async () => ({
+  ...(await vi.importActual<typeof import("node:os")>("node:os")),
+  userInfo: () => ({
+    uid: 1000,
+    gid: 1000,
+    username: "test-user",
+    homedir: "/Users/test-user",
+    shell: "/bin/zsh",
+  }),
+}));
 
 class WaitForConditionError extends Data.TaggedError("WaitForConditionError")<{
   readonly message: string;
@@ -1368,6 +1379,25 @@ it.layer(
       if (!spawnInput) return;
 
       expect(spawnInput.args).toEqual(["-o", "nopromptsp"]);
+    }),
+  );
+
+  it.effect("defaults to the user's login shell when SHELL is missing", () =>
+    Effect.gen(function* () {
+      if ((yield* HostProcessPlatform) === "win32") return;
+
+      const { manager, ptyAdapter } = yield* createManager(5, {
+        env: {},
+      });
+
+      yield* manager.open(openInput());
+
+      expect(ptyAdapter.spawnInputs[0]).toEqual(
+        expect.objectContaining({
+          shell: "/bin/zsh",
+          args: ["-o", "nopromptsp"],
+        }),
+      );
     }),
   );
 
