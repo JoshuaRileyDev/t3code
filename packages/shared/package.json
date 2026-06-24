@@ -75,6 +75,10 @@
       "types": "./src/serverSettings.ts",
       "import": "./src/serverSettings.ts"
     },
+    "./integrations": {
+      "types": "./src/integrations.ts",
+      "import": "./src/integrations.ts"
+    },
     "./String": {
       "types": "./src/String.ts",
       "import": "./src/String.ts"

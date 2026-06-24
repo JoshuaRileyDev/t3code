@@ -5,19 +5,24 @@ import {
   INTEGRATION_DEFINITIONS,
   INTEGRATION_DISPLAY_NAMES,
   INTEGRATION_KINDS,
+  DEFAULT_SERVER_SETTINGS,
+  type EnvironmentId,
   IntegrationAccountId,
+  type IntegrationAccountScope,
   type IntegrationAccount,
   type IntegrationKind,
+  type ServerSettings,
 } from "@t3tools/contracts";
 import { CheckIcon, KeyRoundIcon, PencilIcon, PlusIcon, Trash2Icon } from "lucide-react";
 
-import { usePrimaryEnvironment } from "~/state/environments";
-import { usePrimarySettings, useUpdatePrimarySettings } from "../../hooks/useSettings";
+import { useEnvironments, usePrimaryEnvironment } from "~/state/environments";
+import { useEnvironmentSettings } from "../../hooks/useSettings";
 import { useAtomCommand } from "~/state/use-atom-command";
 import { serverEnvironment } from "~/state/server";
 import { toastManager } from "../ui/toast";
 import { GitHubIcon, GitLabIcon, JiraIcon, LinearIcon } from "../Icons";
 import { Button } from "../ui/button";
+import { Checkbox } from "../ui/checkbox";
 import {
   Dialog,
   DialogDescription,
@@ -27,7 +32,12 @@ import {
   DialogTitle,
 } from "../ui/dialog";
 import { Input } from "../ui/input";
+import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "../ui/select";
 import { SettingsPageContainer, SettingsRow, SettingsSection } from "./settingsLayout";
+import {
+  integrationAccountScopeSummary,
+  integrationAccountTargetEnvironmentIds,
+} from "@t3tools/shared/integrations";
 
 const INTEGRATION_ICON_BY_KIND: Record<IntegrationKind, typeof GitHubIcon> = {
   github: GitHubIcon,
@@ -35,6 +45,43 @@ const INTEGRATION_ICON_BY_KIND: Record<IntegrationKind, typeof GitHubIcon> = {
   jira: JiraIcon,
   linear: LinearIcon,
 };
+
+type IntegrationScopeMode = "all" | "selected";
+
+function integrationScopeToMode(scope: IntegrationAccountScope | undefined): IntegrationScopeMode {
+  if (scope === undefined) return "all";
+  return scope.kind;
+}
+
+function integrationScopeFromMode(input: {
+  readonly mode: IntegrationScopeMode;
+  readonly selectedEnvironmentIds: ReadonlyArray<EnvironmentId>;
+}): IntegrationAccountScope | undefined {
+  if (input.mode === "all") return { kind: "all" };
+
+  const targetEnvironmentIds = new Set<EnvironmentId>(input.selectedEnvironmentIds);
+  return {
+    kind: "selected",
+    environmentIds: [...targetEnvironmentIds],
+  };
+}
+
+function upsertIntegrationAccount(
+  accounts: readonly IntegrationAccount[],
+  account: IntegrationAccount,
+): IntegrationAccount[] {
+  if (!accounts.some((candidate) => candidate.id === account.id)) {
+    return [...accounts, account];
+  }
+  return accounts.map((candidate) => (candidate.id === account.id ? account : candidate));
+}
+
+function removeIntegrationAccount(
+  accounts: readonly IntegrationAccount[],
+  accountId: string,
+): IntegrationAccount[] {
+  return accounts.filter((account) => account.id !== accountId);
+}
 
 function slugifyAccountName(value: string): string {
   return value
@@ -84,26 +131,50 @@ interface AccountDialogState {
 function AccountDialog({
   state,
   existingAccounts,
+  environments,
   onSave,
   onCancel,
 }: {
   state: AccountDialogState;
   existingAccounts: readonly IntegrationAccount[];
-  onSave: (account: IntegrationAccount) => void;
+  environments: ReadonlyArray<{ readonly environmentId: EnvironmentId; readonly label: string }>;
+  onSave: (
+    kind: IntegrationKind,
+    account: IntegrationAccount,
+    previousAccount: IntegrationAccount | null,
+  ) => void;
   onCancel: () => void;
 }) {
-  const environmentId = usePrimaryEnvironment()?.environmentId ?? null;
+  const currentEnvironmentId = usePrimaryEnvironment()?.environmentId ?? null;
+  const environmentLabelsById = useMemo(
+    () => new Map(environments.map((environment) => [environment.environmentId, environment.label])),
+    [environments],
+  );
   const testIntegrationToken = useAtomCommand(serverEnvironment.testIntegrationToken, {
     reportFailure: false,
   });
   const definition = INTEGRATION_DEFINITIONS[state.kind];
   const requiresBaseUrl = definition.baseUrlRequired === true;
-  const steps = requiresBaseUrl ? ["Name", "Site", "Token", "Review"] : ["Name", "Token", "Review"];
+  const steps = requiresBaseUrl
+    ? ["Name", "Site", "Token", "Availability", "Review"]
+    : ["Name", "Token", "Availability", "Review"];
 
   const [step, setStep] = useState(0);
   const [name, setName] = useState(state.account?.name ?? "");
   const [baseUrl, setBaseUrl] = useState(state.account?.baseUrl ?? "");
   const [apiKey, setApiKey] = useState("");
+  const [scopeMode, setScopeMode] = useState<IntegrationScopeMode>(
+    integrationScopeToMode(state.account?.scope),
+  );
+  const [selectedScopeEnvironmentIds, setSelectedScopeEnvironmentIds] = useState<
+    Set<EnvironmentId>
+  >(
+    new Set(
+      state.account?.scope?.kind === "selected"
+        ? state.account.scope.environmentIds
+        : environments.map((environment) => environment.environmentId),
+    ),
+  );
   const [error, setError] = useState<string | null>(null);
   const [isTesting, setIsTesting] = useState(false);
 
@@ -118,9 +189,17 @@ function AccountDialog({
     setName(state.account?.name ?? "");
     setBaseUrl(state.account?.baseUrl ?? "");
     setApiKey("");
+    setScopeMode(integrationScopeToMode(state.account?.scope));
+    setSelectedScopeEnvironmentIds(
+      new Set(
+        state.account?.scope?.kind === "selected"
+          ? state.account.scope.environmentIds
+          : environments.map((environment) => environment.environmentId),
+      ),
+    );
     setError(null);
     setIsTesting(false);
-  }, [state.account, state.kind]);
+  }, [environments, state.account, state.kind]);
 
   const validateName = useCallback(() => {
     const trimmedName = name.trim();
@@ -153,6 +232,14 @@ function AccountDialog({
     }
   }, [baseUrl, definition.baseUrlLabel, requiresBaseUrl, state.account?.baseUrl]);
 
+  const validateScope = useCallback(() => {
+    if (scopeMode === "selected" && selectedScopeEnvironmentIds.size === 0) {
+      setError("Select at least one environment.");
+      return false;
+    }
+    return true;
+  }, [scopeMode, selectedScopeEnvironmentIds]);
+
   const handleNext = useCallback(() => {
     setError(null);
     if (step === 0) {
@@ -173,6 +260,13 @@ function AccountDialog({
         return;
       }
       setStep(requiresBaseUrl ? 3 : 2);
+      return;
+    }
+    if ((requiresBaseUrl && step === 3) || (!requiresBaseUrl && step === 2)) {
+      if (!validateScope()) {
+        return;
+      }
+      setStep(requiresBaseUrl ? 4 : 3);
     }
   }, [
     apiKey,
@@ -181,6 +275,7 @@ function AccountDialog({
     requiresBaseUrl,
     step,
     validateBaseUrl,
+    validateScope,
     validateName,
   ]);
 
@@ -204,15 +299,15 @@ function AccountDialog({
       return;
     }
 
-    if (environmentId === null) {
-      setError("Unable to validate integration tokens without an active environment.");
+    if (!validateScope()) {
+      setStep(requiresBaseUrl ? 3 : 2);
       return;
     }
 
     try {
       setIsTesting(true);
       const result = await testIntegrationToken({
-        environmentId,
+        environmentId: currentEnvironmentId,
         input: preserveSavedToken
           ? {
               kind: state.kind,
@@ -246,17 +341,25 @@ function AccountDialog({
         IntegrationAccountId.make(
           nextAvailableAccountId(state.kind, trimmedName, existingAccounts),
         );
-      onSave({
-        id: nextId,
-        name: trimmedName,
-        ...(normalizedBaseUrl !== null
-          ? { baseUrl: normalizedBaseUrl }
-          : preserveSavedBaseUrl && existing?.baseUrl !== undefined
-            ? { baseUrl: existing.baseUrl }
-            : {}),
-        apiKey: trimmedKey,
-        ...(trimmedKey.length > 0 || preserveSavedToken ? { apiKeyRedacted: true } : {}),
-      });
+      onSave(
+        state.kind,
+        {
+          id: nextId,
+          name: trimmedName,
+          ...(normalizedBaseUrl !== null
+            ? { baseUrl: normalizedBaseUrl }
+            : preserveSavedBaseUrl && existing?.baseUrl !== undefined
+              ? { baseUrl: existing.baseUrl }
+              : {}),
+          scope: integrationScopeFromMode({
+            mode: scopeMode,
+            selectedEnvironmentIds: [...selectedScopeEnvironmentIds],
+          }),
+          apiKey: trimmedKey,
+          ...(trimmedKey.length > 0 || preserveSavedToken ? { apiKeyRedacted: true } : {}),
+        },
+        existing ?? null,
+      );
     } catch (cause) {
       const message = cause instanceof Error ? cause.message : "Could not verify the token.";
       setError(message);
@@ -272,7 +375,6 @@ function AccountDialog({
   }, [
     apiKey,
     definition.tokenLabel,
-    environmentId,
     existingAccounts,
     onSave,
     preserveSavedBaseUrl,
@@ -282,9 +384,18 @@ function AccountDialog({
     state.kind,
     validateBaseUrl,
     validateName,
+    validateScope,
+    scopeMode,
+    selectedScopeEnvironmentIds,
   ]);
 
   const reviewBaseUrl = preserveSavedBaseUrl ? state.account?.baseUrl : baseUrl.trim();
+  const reviewScope = integrationScopeFromMode({ mode: scopeMode, selectedEnvironmentIds: [...selectedScopeEnvironmentIds] });
+  const reviewScopeSummary = integrationAccountScopeSummary({
+    scope: reviewScope,
+    environmentLabelById: environmentLabelsById,
+  });
+  const availabilityLabel = scopeMode === "all" ? "All environments" : "Specific environments";
 
   const submitLabel = preserveSavedToken
     ? "Save changes"
@@ -308,14 +419,19 @@ function AccountDialog({
                 <button
                   key={label}
                   type="button"
+                  disabled={index > step}
                   className={
                     active
                       ? "flex items-center gap-2 rounded-lg border border-primary/40 bg-primary/10 px-3 py-2 text-left"
                       : complete
                         ? "flex items-center gap-2 rounded-lg border border-border bg-background px-3 py-2 text-left"
-                        : "flex items-center gap-2 rounded-lg border border-border bg-muted/30 px-3 py-2 text-left"
+                        : "flex items-center gap-2 rounded-lg border border-border bg-muted/30 px-3 py-2 text-left disabled:pointer-events-none disabled:opacity-60"
                   }
-                  onClick={() => setStep(index)}
+                  onClick={() => {
+                    if (index <= step) {
+                      setStep(index);
+                    }
+                  }}
                 >
                   <span
                     className={
@@ -397,6 +513,73 @@ function AccountDialog({
 
           {(requiresBaseUrl ? step === 3 : step === 2) ? (
             <div className="space-y-3 rounded-lg border border-border/70 bg-muted/20 p-4 text-sm text-muted-foreground">
+              <label className="space-y-1.5">
+                <span className="text-xs font-medium text-muted-foreground">Availability</span>
+                <Select
+                  value={scopeMode}
+                  onValueChange={(value) => {
+                    setError(null);
+                    setScopeMode(value as IntegrationScopeMode);
+                  }}
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue>{availabilityLabel}</SelectValue>
+                  </SelectTrigger>
+                  <SelectPopup>
+                    <SelectItem hideIndicator value="all">
+                      All environments
+                    </SelectItem>
+                    <SelectItem hideIndicator value="selected">
+                      Specific environments
+                    </SelectItem>
+                  </SelectPopup>
+                </Select>
+              </label>
+
+              {scopeMode === "selected" ? (
+                <div className="space-y-2 rounded-md border border-border/70 bg-background p-3 text-xs">
+                  <p className="text-muted-foreground">Pick the environments that should receive this account.</p>
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    {environments.map((environment) => {
+                      const checked = selectedScopeEnvironmentIds.has(environment.environmentId);
+                      return (
+                        <label
+                          key={environment.environmentId}
+                          className="flex items-center gap-2 rounded-md border border-border/60 px-3 py-2 text-foreground"
+                        >
+                          <Checkbox
+                            checked={checked}
+                            onCheckedChange={(nextChecked) => {
+                              setError(null);
+                              const next = new Set(selectedScopeEnvironmentIds);
+                              if (nextChecked === true) {
+                                next.add(environment.environmentId);
+                              } else {
+                                next.delete(environment.environmentId);
+                              }
+                              setSelectedScopeEnvironmentIds(next);
+                            }}
+                          />
+                          <span className="min-w-0 flex-1 truncate text-xs font-medium">
+                            {environment.label}
+                          </span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+              ) : null}
+
+              <p className="text-xs text-muted-foreground">
+                {scopeMode === "all"
+                  ? "The account will be synced to every connected environment."
+                  : "The account will be synced to the selected environments."}
+              </p>
+            </div>
+          ) : null}
+
+          {(requiresBaseUrl ? step === 4 : step === 3) ? (
+            <div className="space-y-3 rounded-lg border border-border/70 bg-muted/20 p-4 text-sm text-muted-foreground">
               <p className="text-foreground">
                 {preserveSavedToken
                   ? "We’ll keep the existing encrypted key and save these changes."
@@ -421,6 +604,13 @@ function AccountDialog({
                     <dd className="font-medium text-foreground">{reviewBaseUrl || "Not set"}</dd>
                   </div>
                 ) : null}
+                <div className="rounded-md border border-border/70 bg-background px-3 py-2 sm:col-span-2">
+                  <dt className="text-muted-foreground">Availability</dt>
+                  <dd className="font-medium text-foreground">{availabilityLabel}</dd>
+                  {scopeMode === "selected" ? (
+                    <div className="mt-1 text-[11px] text-muted-foreground">{reviewScopeSummary}</div>
+                  ) : null}
+                </div>
               </dl>
             </div>
           ) : null}
@@ -455,61 +645,202 @@ function AccountDialog({
   );
 }
 
+function EnvironmentSettingsCollector({
+  environmentId,
+  onSettings,
+}: {
+  environmentId: EnvironmentId;
+  onSettings: (environmentId: EnvironmentId, settings: ServerSettings) => void;
+}) {
+  const settings = useEnvironmentSettings(environmentId);
+
+  useEffect(() => {
+    onSettings(environmentId, settings);
+  }, [environmentId, onSettings, settings]);
+
+  return null;
+}
+
 export function IntegrationsSettingsPanel() {
-  const settings = usePrimarySettings();
-  const updateSettings = useUpdatePrimarySettings();
+  const { environments } = useEnvironments();
+  const primaryEnvironment = usePrimaryEnvironment();
   const [activeDialog, setActiveDialog] = useState<AccountDialogState | null>(null);
+  const [selectedEnvironmentId, setSelectedEnvironmentId] = useState<EnvironmentId | null>(
+    primaryEnvironment?.environmentId ?? null,
+  );
+  const [settingsByEnvironmentId, setSettingsByEnvironmentId] = useState<
+    Record<string, ServerSettings>
+  >({});
+
+  const updateSettings = useAtomCommand(serverEnvironment.updateSettings, {
+    reportFailure: false,
+  });
+
+  useEffect(() => {
+    if (
+      selectedEnvironmentId !== null &&
+      environments.some((environment) => environment.environmentId === selectedEnvironmentId)
+    ) {
+      return;
+    }
+
+    setSelectedEnvironmentId(
+      primaryEnvironment?.environmentId ?? environments[0]?.environmentId ?? null,
+    );
+  }, [environments, primaryEnvironment?.environmentId, selectedEnvironmentId]);
+
+  const environmentLabelsById = useMemo(
+    () =>
+      new Map(environments.map((environment) => [environment.environmentId, environment.label])),
+    [environments],
+  );
+
+  const selectedSettings =
+    selectedEnvironmentId !== null
+      ? (settingsByEnvironmentId[selectedEnvironmentId] ?? DEFAULT_SERVER_SETTINGS)
+      : DEFAULT_SERVER_SETTINGS;
 
   const sections = useMemo(
     () =>
       INTEGRATION_KINDS.map((kind) => ({
         kind,
-        accounts: settings.integrations[kind] ?? [],
+        accounts: selectedSettings.integrations[kind] ?? [],
       })),
-    [settings.integrations],
+    [selectedSettings.integrations],
+  );
+
+  const handleEnvironmentSettings = useCallback(
+    (environmentId: EnvironmentId, settings: ServerSettings) => {
+      setSettingsByEnvironmentId((current) =>
+        current[environmentId] === settings ? current : { ...current, [environmentId]: settings },
+      );
+    },
+    [],
   );
 
   const handleSaveAccount = useCallback(
-    (kind: IntegrationKind, account: IntegrationAccount) => {
-      const nextAccounts = (() => {
-        const currentAccounts: readonly IntegrationAccount[] = settings.integrations[kind] ?? [];
-        const existingIndex = currentAccounts.findIndex(
-          (candidate: IntegrationAccount) => candidate.id === account.id,
-        );
-        if (existingIndex === -1) {
-          return [...currentAccounts, account];
-        }
-        return currentAccounts.map((candidate: IntegrationAccount) =>
-          candidate.id === account.id ? account : candidate,
-        );
-      })();
+    async (
+      kind: IntegrationKind,
+      account: IntegrationAccount,
+      previousAccount: IntegrationAccount | null,
+    ) => {
+      if (selectedEnvironmentId === null) {
+        return;
+      }
 
-      void updateSettings({
-        integrations: {
-          ...settings.integrations,
-          [kind]: nextAccounts,
-        },
+      const allEnvironmentIds = environments.map((environment) => environment.environmentId);
+      const nextEnvironmentIds = integrationAccountTargetEnvironmentIds({
+        currentEnvironmentId: selectedEnvironmentId,
+        allEnvironmentIds,
+        scope: account.scope,
       });
+      const previousEnvironmentIds = integrationAccountTargetEnvironmentIds({
+        currentEnvironmentId: selectedEnvironmentId,
+        allEnvironmentIds,
+        scope: previousAccount?.scope,
+      });
+
+      for (const environmentId of nextEnvironmentIds) {
+        const currentSettings =
+          settingsByEnvironmentId[environmentId] ??
+          (environmentId === selectedEnvironmentId ? selectedSettings : DEFAULT_SERVER_SETTINGS);
+        const currentAccounts = currentSettings.integrations[kind] ?? [];
+        const nextAccounts = upsertIntegrationAccount(currentAccounts, account);
+        await updateSettings({
+          environmentId,
+          input: {
+            patch: {
+              integrations: {
+                [kind]: nextAccounts,
+              },
+            },
+          },
+        });
+      }
+
+      for (const environmentId of previousEnvironmentIds) {
+        if (nextEnvironmentIds.includes(environmentId)) {
+          continue;
+        }
+
+        const currentSettings =
+          settingsByEnvironmentId[environmentId] ??
+          (environmentId === selectedEnvironmentId ? selectedSettings : DEFAULT_SERVER_SETTINGS);
+        const currentAccounts = currentSettings.integrations[kind] ?? [];
+        const nextAccounts = removeIntegrationAccount(currentAccounts, account.id);
+        await updateSettings({
+          environmentId,
+          input: {
+            patch: {
+              integrations: {
+                [kind]: nextAccounts,
+              },
+            },
+          },
+        });
+      }
+
       setActiveDialog(null);
     },
-    [settings.integrations, updateSettings],
+    [
+      environments,
+      selectedEnvironmentId,
+      selectedSettings,
+      settingsByEnvironmentId,
+      updateSettings,
+    ],
   );
 
   const handleDeleteAccount = useCallback(
-    (kind: IntegrationKind, accountId: string) => {
-      const currentAccounts: readonly IntegrationAccount[] = settings.integrations[kind] ?? [];
-      void updateSettings({
-        integrations: {
-          ...settings.integrations,
-          [kind]: currentAccounts.filter((account: IntegrationAccount) => account.id !== accountId),
-        },
+    async (kind: IntegrationKind, account: IntegrationAccount) => {
+      if (selectedEnvironmentId === null) {
+        return;
+      }
+
+      const allEnvironmentIds = environments.map((environment) => environment.environmentId);
+      const targetEnvironmentIds = integrationAccountTargetEnvironmentIds({
+        currentEnvironmentId: selectedEnvironmentId,
+        allEnvironmentIds,
+        scope: account.scope,
       });
+
+      for (const environmentId of targetEnvironmentIds) {
+        const currentSettings =
+          settingsByEnvironmentId[environmentId] ??
+          (environmentId === selectedEnvironmentId ? selectedSettings : DEFAULT_SERVER_SETTINGS);
+        const currentAccounts = currentSettings.integrations[kind] ?? [];
+        const nextAccounts = removeIntegrationAccount(currentAccounts, account.id);
+        await updateSettings({
+          environmentId,
+          input: {
+            patch: {
+              integrations: {
+                [kind]: nextAccounts,
+              },
+            },
+          },
+        });
+      }
     },
-    [settings.integrations, updateSettings],
+    [
+      environments,
+      selectedEnvironmentId,
+      selectedSettings,
+      settingsByEnvironmentId,
+      updateSettings,
+    ],
   );
 
   return (
     <SettingsPageContainer>
+      {environments.map((environment) => (
+        <EnvironmentSettingsCollector
+          key={environment.environmentId}
+          environmentId={environment.environmentId}
+          onSettings={handleEnvironmentSettings}
+        />
+      ))}
+
       <div className="px-2 pb-2 pt-1">
         <h1 className="text-3xl font-semibold tracking-tight">Integrations</h1>
       </div>
@@ -527,6 +858,7 @@ export function IntegrationsSettingsPanel() {
                 size="xs"
                 variant="outline"
                 onClick={() => setActiveDialog({ kind, account: null })}
+                disabled={selectedEnvironmentId === null}
               >
                 <PlusIcon className="size-3.5" />
                 Add account
@@ -544,6 +876,15 @@ export function IntegrationsSettingsPanel() {
                     key={account.id}
                     title={account.name}
                     description={definition.accountHint}
+                    status={
+                      <span className="inline-flex items-center gap-1.5 rounded-full border border-border/70 bg-muted/30 px-2 py-1">
+                        <KeyRoundIcon className="size-3.5" />
+                        {integrationAccountScopeSummary({
+                          scope: account.scope,
+                          environmentLabelById: environmentLabelsById,
+                        })}
+                      </span>
+                    }
                     control={
                       <div className="flex items-center gap-2">
                         <Button
@@ -557,7 +898,7 @@ export function IntegrationsSettingsPanel() {
                         <Button
                           size="xs"
                           variant="ghost"
-                          onClick={() => handleDeleteAccount(kind, account.id)}
+                          onClick={() => void handleDeleteAccount(kind, account)}
                         >
                           <Trash2Icon className="size-3.5" />
                           Remove
@@ -579,11 +920,14 @@ export function IntegrationsSettingsPanel() {
         );
       })}
 
-      {activeDialog ? (
+      {selectedEnvironmentId !== null && activeDialog ? (
         <AccountDialog
           state={activeDialog}
-          existingAccounts={settings.integrations[activeDialog.kind] ?? []}
-          onSave={(account) => handleSaveAccount(activeDialog.kind, account)}
+          environments={environments}
+          existingAccounts={selectedSettings.integrations[activeDialog.kind] ?? []}
+          onSave={(kind, account, previousAccount) =>
+            void handleSaveAccount(kind, account, previousAccount)
+          }
           onCancel={() => setActiveDialog(null)}
         />
       ) : null}

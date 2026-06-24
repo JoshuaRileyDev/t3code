@@ -2,7 +2,7 @@ import * as Effect from "effect/Effect";
 import * as Duration from "effect/Duration";
 import * as Schema from "effect/Schema";
 import * as SchemaTransformation from "effect/SchemaTransformation";
-import { TrimmedNonEmptyString, TrimmedString } from "./baseSchemas.ts";
+import { EnvironmentId, TrimmedNonEmptyString, TrimmedString } from "./baseSchemas.ts";
 import { DEFAULT_GIT_TEXT_GENERATION_MODEL, ProviderOptionSelections } from "./model.ts";
 import { ModelSelection } from "./orchestration.ts";
 import { ProviderInstanceConfig, ProviderInstanceId } from "./providerInstance.ts";
@@ -104,10 +104,22 @@ export const IntegrationAccountId = integrationAccountIdSchema.pipe(
 );
 export type IntegrationAccountId = typeof IntegrationAccountId.Type;
 
+export const IntegrationAccountScope = Schema.Union([
+  Schema.Struct({
+    kind: Schema.Literal("all"),
+  }),
+  Schema.Struct({
+    kind: Schema.Literal("selected"),
+    environmentIds: Schema.Array(EnvironmentId),
+  }),
+]);
+export type IntegrationAccountScope = typeof IntegrationAccountScope.Type;
+
 export const IntegrationAccount = Schema.Struct({
   id: IntegrationAccountId,
   name: TrimmedNonEmptyString,
   baseUrl: Schema.optionalKey(TrimmedString),
+  scope: Schema.optionalKey(IntegrationAccountScope),
   apiKey: Schema.String.pipe(Schema.withDecodingDefault(Effect.succeed(""))),
   apiKeyRedacted: Schema.optionalKey(Schema.Boolean),
 });
