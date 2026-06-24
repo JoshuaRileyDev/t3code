@@ -40,6 +40,8 @@ import rehypeSanitize, { defaultSchema } from "rehype-sanitize";
 import remarkBreaks from "remark-breaks";
 import remarkGfm from "remark-gfm";
 import { renderSkillInlineMarkdownChildren } from "./chat/SkillInlineText";
+import { renderSlashCommandInlineMarkdownChildren } from "./chat/SlashCommandInlineText";
+import type { ComposerSlashCommandLike } from "~/lib/composerSlashCommands";
 import { CHAT_FILE_TAG_CHIP_CLASS_NAME, FileTagChipContent } from "./chat/FileTagChip";
 import { PierreEntryIcon } from "./chat/PierreEntryIcon";
 import { hasSpecificPierreIconForFileName, syntheticFileNameForLanguageId } from "../pierre-icons";
@@ -110,6 +112,7 @@ interface ChatMarkdownProps {
   onTaskListChange?: ((input: { markerOffset: number; checked: boolean }) => void) | undefined;
   isStreaming?: boolean;
   skills?: ReadonlyArray<Pick<ServerProviderSkill, "name" | "displayName">>;
+  slashCommands?: ReadonlyArray<ComposerSlashCommandLike>;
   className?: string;
   /** Treat single newlines as hard breaks — chat-style user input. */
   lineBreaks?: boolean;
@@ -1229,6 +1232,7 @@ function ChatMarkdown({
   onTaskListChange,
   isStreaming = false,
   skills = EMPTY_MARKDOWN_SKILLS,
+  slashCommands = [],
   className,
   lineBreaks = false,
 }: ChatMarkdownProps) {
@@ -1323,7 +1327,14 @@ function ChatMarkdown({
   const markdownComponents = useMemo<Components>(
     () => ({
       p({ node: _node, children, ...props }) {
-        return <p {...props}>{renderSkillInlineMarkdownChildren(children, skills)}</p>;
+        return (
+          <p {...props}>
+            {renderSlashCommandInlineMarkdownChildren(
+              renderSkillInlineMarkdownChildren(children, skills),
+              slashCommands,
+            )}
+          </p>
+        );
       },
       li({ node, children, ...props }) {
         const listItemStart = node?.position?.start.offset;
@@ -1331,7 +1342,10 @@ function ChatMarkdown({
           typeof listItemStart === "number" ? findTaskListMarkerOffset(text, listItemStart) : null;
         return (
           <li {...props} data-task-marker-offset={markerOffset ?? undefined}>
-            {renderSkillInlineMarkdownChildren(children, skills)}
+            {renderSlashCommandInlineMarkdownChildren(
+              renderSkillInlineMarkdownChildren(children, skills),
+              slashCommands,
+            )}
           </li>
         );
       },

@@ -9,6 +9,8 @@ import {
   parseStandaloneComposerSlashCommand,
   replaceTextRange,
 } from "./composer-logic";
+
+const slashCommands = [{ name: "ui", description: "Explore and refine UI" }];
 import { INLINE_TERMINAL_CONTEXT_PLACEHOLDER } from "./lib/terminalContext";
 
 describe("detectComposerTrigger", () => {
@@ -249,6 +251,16 @@ describe("collapseExpandedComposerCursor", () => {
       collapsedCursorAfterSkill,
     );
   });
+
+  it("maps expanded slash-command cursor back to collapsed cursor", () => {
+    const text = "run /ui then";
+    const collapsedCursorAfterCommand = "run /ui ".length;
+    const expandedCursorAfterCommand = "run /ui ".length;
+
+    expect(collapseExpandedComposerCursor(text, expandedCursorAfterCommand, slashCommands)).toBe(
+      collapsedCursorAfterCommand,
+    );
+  });
 });
 
 describe("clampCollapsedComposerCursor", () => {
@@ -332,6 +344,19 @@ describe("isCollapsedCursorAdjacentToInlineToken", () => {
 
     expect(isCollapsedCursorAdjacentToInlineToken(text, tokenEnd, "left")).toBe(true);
     expect(isCollapsedCursorAdjacentToInlineToken(text, tokenStart, "right")).toBe(true);
+  });
+
+  it("treats slash-command pills as inline tokens for adjacency checks", () => {
+    const text = "run /ui next";
+    const tokenStart = "run ".length;
+    const tokenEnd = tokenStart + 1;
+
+    expect(isCollapsedCursorAdjacentToInlineToken(text, tokenEnd, "left", slashCommands)).toBe(
+      true,
+    );
+    expect(isCollapsedCursorAdjacentToInlineToken(text, tokenStart, "right", slashCommands)).toBe(
+      true,
+    );
   });
 });
 

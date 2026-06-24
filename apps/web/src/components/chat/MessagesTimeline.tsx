@@ -31,6 +31,7 @@ import {
 } from "../../session-logic";
 import { type TurnDiffSummary } from "../../types";
 import { summarizeTurnDiffStats } from "../../lib/turnDiffTree";
+import type { ComposerSlashCommandLike } from "~/lib/composerSlashCommands";
 import {
   getRenderablePatch,
   resolveDiffThemeName,
@@ -122,6 +123,7 @@ interface TimelineRowSharedState {
   resolvedTheme: "light" | "dark";
   workspaceRoot: string | undefined;
   skills: ReadonlyArray<Pick<ServerProviderSkill, "name" | "displayName">>;
+  slashCommands: ReadonlyArray<ComposerSlashCommandLike>;
   activeThreadEnvironmentId: EnvironmentId;
   onRevertUserMessage: (messageId: MessageId) => void;
   onImageExpand: (preview: ExpandedImagePreview) => void;
@@ -165,6 +167,7 @@ interface MessagesTimelineProps {
   timestampFormat: TimestampFormat;
   workspaceRoot: string | undefined;
   skills?: ReadonlyArray<Pick<ServerProviderSkill, "name" | "displayName">>;
+  slashCommands?: ReadonlyArray<ComposerSlashCommandLike>;
   onIsAtEndChange: (isAtEnd: boolean) => void;
 }
 
@@ -192,6 +195,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
   timestampFormat,
   workspaceRoot,
   skills = EMPTY_TIMELINE_SKILLS,
+  slashCommands = [],
   onIsAtEndChange,
 }: MessagesTimelineProps) {
   const [expandedTurnIds, setExpandedTurnIds] = useState<ReadonlySet<TurnId>>(new Set());
@@ -319,6 +323,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
       resolvedTheme,
       workspaceRoot,
       skills,
+      slashCommands,
       activeThreadEnvironmentId,
       onRevertUserMessage,
       onImageExpand,
@@ -332,6 +337,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
       resolvedTheme,
       workspaceRoot,
       skills,
+      slashCommands,
       activeThreadEnvironmentId,
       onRevertUserMessage,
       onImageExpand,
@@ -592,6 +598,7 @@ function AssistantTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "mess
           threadRef={ctx.threadRef ?? undefined}
           isStreaming={Boolean(row.message.streaming)}
           skills={ctx.skills}
+          slashCommands={ctx.slashCommands}
         />
         <AssistantChangedFilesSection
           turnSummary={row.assistantTurnDiffSummary}
@@ -1122,6 +1129,7 @@ const UserMessageBody = memo(function UserMessageBody(props: {
             cwd={props.markdownCwd}
             threadRef={ctx.threadRef ?? undefined}
             skills={props.skills}
+            slashCommands={ctx.slashCommands}
             className="text-foreground"
             lineBreaks
           />
@@ -1144,6 +1152,7 @@ const UserMessageBody = memo(function UserMessageBody(props: {
                   cwd={props.markdownCwd}
                   threadRef={ctx.threadRef ?? undefined}
                   skills={props.skills}
+                  slashCommands={ctx.slashCommands}
                   className="text-foreground"
                   lineBreaks
                 />
@@ -1232,6 +1241,7 @@ const UserMessageBody = memo(function UserMessageBody(props: {
           cwd={props.markdownCwd}
           threadRef={ctx.threadRef ?? undefined}
           skills={props.skills}
+          slashCommands={ctx.slashCommands}
           className="text-foreground"
           lineBreaks
         />,
@@ -1257,6 +1267,7 @@ const UserMessageBody = memo(function UserMessageBody(props: {
       cwd={props.markdownCwd}
       threadRef={ctx.threadRef ?? undefined}
       skills={props.skills}
+      slashCommands={ctx.slashCommands}
       className="text-foreground"
       lineBreaks
     />
@@ -1292,6 +1303,7 @@ function UserMessageReviewCommentCard({ comment }: { comment: ReviewCommentConte
           cwd={ctx.markdownCwd}
           threadRef={ctx.threadRef ?? undefined}
           skills={ctx.skills}
+          slashCommands={ctx.slashCommands}
           className="text-foreground"
         />
       )}
