@@ -40,6 +40,8 @@ import rehypeSanitize, { defaultSchema } from "rehype-sanitize";
 import remarkBreaks from "remark-breaks";
 import remarkGfm from "remark-gfm";
 import { renderSkillInlineMarkdownChildren } from "./chat/SkillInlineText";
+import { renderSlashCommandInlineMarkdownChildren } from "./chat/SlashCommandInlineText";
+import type { ComposerSlashCommandLike } from "~/lib/composerSlashCommands";
 import { CHAT_FILE_TAG_CHIP_CLASS_NAME, FileTagChipContent } from "./chat/FileTagChip";
 import { PierreEntryIcon } from "./chat/PierreEntryIcon";
 import { hasSpecificPierreIconForFileName, syntheticFileNameForLanguageId } from "../pierre-icons";
@@ -54,6 +56,7 @@ import { resolveDiffThemeName, type DiffThemeName } from "../lib/diffRendering";
 import { fnv1a32 } from "../lib/diffRendering";
 import { LRUCache } from "../lib/lruCache";
 import { useTheme } from "../hooks/useTheme";
+import { useClientSettings } from "../hooks/useSettings";
 import {
   chatMarkdownClipboardPayload,
   serializeTableElementToCsv,
@@ -110,6 +113,7 @@ interface ChatMarkdownProps {
   onTaskListChange?: ((input: { markerOffset: number; checked: boolean }) => void) | undefined;
   isStreaming?: boolean;
   skills?: ReadonlyArray<Pick<ServerProviderSkill, "name" | "displayName">>;
+  slashCommands?: ReadonlyArray<ComposerSlashCommandLike>;
   className?: string;
   /** Treat single newlines as hard breaks — chat-style user input. */
   lineBreaks?: boolean;
@@ -295,7 +299,7 @@ function getHighlighterPromise(language: string): Promise<DiffsHighlighter> {
 function MarkdownTable({ children, ...props }: React.ComponentProps<"table">) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const tableRef = useRef<HTMLTableElement | null>(null);
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(useClientSettings((settings) => settings.wordWrap));
   const [copied, setCopied] = useState(false);
   const copiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const expandLabel = expanded ? "Collapse table cells" : "Expand table cells";
@@ -525,10 +529,11 @@ function MarkdownCodeBlock({
   children: ReactNode;
 }) {
   const [copied, setCopied] = useState(false);
-  const [wrapped, setWrapped] = useState(false);
+  const [wrapped, setWrapped] = useState(useClientSettings((settings) => settings.wordWrap));
   const copiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const wrapLabel = wrapped ? "Disable line wrap" : "Wrap lines";
   const copyLabel = copied ? "Copied" : "Copy code";
+
   const handleCopy = useCallback(() => {
     if (typeof navigator === "undefined" || navigator.clipboard == null) {
       return;
@@ -1229,6 +1234,7 @@ function ChatMarkdown({
   onTaskListChange,
   isStreaming = false,
   skills = EMPTY_MARKDOWN_SKILLS,
+  slashCommands = [],
   className,
   lineBreaks = false,
 }: ChatMarkdownProps) {
@@ -1323,7 +1329,14 @@ function ChatMarkdown({
   const markdownComponents = useMemo<Components>(
     () => ({
       p({ node: _node, children, ...props }) {
-        return <p {...props}>{renderSkillInlineMarkdownChildren(children, skills)}</p>;
+        return (
+          <p {...props}>
+            {renderSlashCommandInlineMarkdownChildren(
+              renderSkillInlineMarkdownChildren(children, skills),
+              slashCommands,
+            )}
+          </p>
+        );
       },
       li({ node, children, ...props }) {
         const listItemStart = node?.position?.start.offset;
@@ -1331,7 +1344,10 @@ function ChatMarkdown({
           typeof listItemStart === "number" ? findTaskListMarkerOffset(text, listItemStart) : null;
         return (
           <li {...props} data-task-marker-offset={markerOffset ?? undefined}>
-            {renderSkillInlineMarkdownChildren(children, skills)}
+            {renderSlashCommandInlineMarkdownChildren(
+              renderSkillInlineMarkdownChildren(children, skills),
+              slashCommands,
+            )}
           </li>
         );
       },

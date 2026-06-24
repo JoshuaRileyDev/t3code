@@ -39,7 +39,6 @@ describe("integration scope helpers", () => {
     expect(
       integrationAccountScopeSummary({
         scope: { kind: "all" },
-        currentEnvironmentLabel: "Primary",
         environmentLabelById: new Map(),
       }),
     ).toBe("Available in all environments");

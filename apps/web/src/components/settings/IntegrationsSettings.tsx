@@ -56,7 +56,7 @@ function integrationScopeToMode(scope: IntegrationAccountScope | undefined): Int
 function integrationScopeFromMode(input: {
   readonly mode: IntegrationScopeMode;
   readonly selectedEnvironmentIds: ReadonlyArray<EnvironmentId>;
-}): IntegrationAccountScope | undefined {
+}): IntegrationAccountScope {
   if (input.mode === "all") return { kind: "all" };
 
   const targetEnvironmentIds = new Set<EnvironmentId>(input.selectedEnvironmentIds);
@@ -147,7 +147,8 @@ function AccountDialog({
 }) {
   const currentEnvironmentId = usePrimaryEnvironment()?.environmentId ?? null;
   const environmentLabelsById = useMemo(
-    () => new Map(environments.map((environment) => [environment.environmentId, environment.label])),
+    () =>
+      new Map(environments.map((environment) => [environment.environmentId, environment.label])),
     [environments],
   );
   const testIntegrationToken = useAtomCommand(serverEnvironment.testIntegrationToken, {
@@ -304,25 +305,26 @@ function AccountDialog({
       return;
     }
 
+    if (currentEnvironmentId === null) {
+      setError("No primary environment is available.");
+      return;
+    }
+
+    const validationInput = {
+      kind: state.kind,
+      accountName: trimmedName,
+      ...(normalizedBaseUrl !== null ? { baseUrl: normalizedBaseUrl } : {}),
+      ...(state.account?.id !== undefined ? { accountId: state.account.id } : {}),
+      ...(preserveSavedToken
+        ? { useStoredToken: true }
+        : { apiKey: trimmedKey }),
+    };
+
     try {
       setIsTesting(true);
       const result = await testIntegrationToken({
         environmentId: currentEnvironmentId,
-        input: preserveSavedToken
-          ? {
-              kind: state.kind,
-              accountId: state.account?.id,
-              accountName: trimmedName,
-              ...(normalizedBaseUrl !== null ? { baseUrl: normalizedBaseUrl } : {}),
-              useStoredToken: true,
-            }
-          : {
-              kind: state.kind,
-              accountId: state.account?.id,
-              accountName: trimmedName,
-              ...(normalizedBaseUrl !== null ? { baseUrl: normalizedBaseUrl } : {}),
-              apiKey: trimmedKey,
-            },
+        input: validationInput,
       });
 
       if (result._tag !== "Success") {
@@ -390,7 +392,10 @@ function AccountDialog({
   ]);
 
   const reviewBaseUrl = preserveSavedBaseUrl ? state.account?.baseUrl : baseUrl.trim();
-  const reviewScope = integrationScopeFromMode({ mode: scopeMode, selectedEnvironmentIds: [...selectedScopeEnvironmentIds] });
+  const reviewScope = integrationScopeFromMode({
+    mode: scopeMode,
+    selectedEnvironmentIds: [...selectedScopeEnvironmentIds],
+  });
   const reviewScopeSummary = integrationAccountScopeSummary({
     scope: reviewScope,
     environmentLabelById: environmentLabelsById,
@@ -538,7 +543,9 @@ function AccountDialog({
 
               {scopeMode === "selected" ? (
                 <div className="space-y-2 rounded-md border border-border/70 bg-background p-3 text-xs">
-                  <p className="text-muted-foreground">Pick the environments that should receive this account.</p>
+                  <p className="text-muted-foreground">
+                    Pick the environments that should receive this account.
+                  </p>
                   <div className="grid gap-2 sm:grid-cols-2">
                     {environments.map((environment) => {
                       const checked = selectedScopeEnvironmentIds.has(environment.environmentId);
@@ -608,7 +615,9 @@ function AccountDialog({
                   <dt className="text-muted-foreground">Availability</dt>
                   <dd className="font-medium text-foreground">{availabilityLabel}</dd>
                   {scopeMode === "selected" ? (
-                    <div className="mt-1 text-[11px] text-muted-foreground">{reviewScopeSummary}</div>
+                    <div className="mt-1 text-[11px] text-muted-foreground">
+                      {reviewScopeSummary}
+                    </div>
                   ) : null}
                 </div>
               </dl>

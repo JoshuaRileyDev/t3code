@@ -2,7 +2,11 @@ import { EnvironmentId, ProjectId, ProviderInstanceId, ThreadId } from "@t3tools
 import { describe, expect, it } from "vite-plus/test";
 
 import { DEFAULT_INTERACTION_MODE, DEFAULT_RUNTIME_MODE, type Thread } from "./types";
-import { formatWorktreePathForDisplay, getOrphanedWorktreePathForThread } from "./worktreeCleanup";
+import {
+  formatWorktreePathForDisplay,
+  getOrphanedBranchNameForThread,
+  getOrphanedWorktreePathForThread,
+} from "./worktreeCleanup";
 
 const localEnvironmentId = EnvironmentId.make("environment-local");
 
@@ -80,6 +84,34 @@ describe("getOrphanedWorktreePathForThread", () => {
     ];
     const result = getOrphanedWorktreePathForThread(threads, ThreadId.make("thread-1"));
     expect(result).toBe("/tmp/repo/worktrees/feature-a");
+  });
+});
+
+describe("getOrphanedBranchNameForThread", () => {
+  it("returns null when the target thread does not exist", () => {
+    const result = getOrphanedBranchNameForThread([], ThreadId.make("missing-thread"));
+    expect(result).toBeNull();
+  });
+
+  it("returns null when the target thread has no branch", () => {
+    const threads = [makeThread()];
+    const result = getOrphanedBranchNameForThread(threads, ThreadId.make("thread-1"));
+    expect(result).toBeNull();
+  });
+
+  it("returns the branch when no other thread links to it", () => {
+    const threads = [makeThread({ branch: "feature-a" })];
+    const result = getOrphanedBranchNameForThread(threads, ThreadId.make("thread-1"));
+    expect(result).toBe("feature-a");
+  });
+
+  it("returns null when another thread links to the same branch", () => {
+    const threads = [
+      makeThread({ id: ThreadId.make("thread-1"), branch: "feature-a" }),
+      makeThread({ id: ThreadId.make("thread-2"), branch: "feature-a" }),
+    ];
+    const result = getOrphanedBranchNameForThread(threads, ThreadId.make("thread-1"));
+    expect(result).toBeNull();
   });
 });
 

@@ -5006,6 +5006,20 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
 
       yield* Effect.scoped(
         withWsRpcClient(wsUrl, (client) =>
+          client[WS_METHODS.vcsDeleteRef]({
+            cwd: "/tmp/repo",
+            refName: "feature/new",
+          }),
+        ),
+      );
+
+      const refsAfterDelete = yield* Effect.scoped(
+        withWsRpcClient(wsUrl, (client) => client[WS_METHODS.vcsListRefs]({ cwd: "/tmp/repo" })),
+      );
+      assert.ok(!refsAfterDelete.refs.some((ref) => ref.name === "feature/new"));
+
+      yield* Effect.scoped(
+        withWsRpcClient(wsUrl, (client) =>
           client[WS_METHODS.vcsSwitchRef]({
             cwd: "/tmp/repo",
             refName: "main",

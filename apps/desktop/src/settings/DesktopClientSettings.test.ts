@@ -14,12 +14,18 @@ import * as DesktopClientSettings from "./DesktopClientSettings.ts";
 
 const clientSettings: ClientSettings = {
   autoOpenPlanSidebar: false,
+  collapsedAgentsSlashCommands: false,
+  collapsedCustomSlashCommands: false,
   confirmThreadArchive: true,
   confirmThreadDelete: false,
+  customSlashCommands: [],
   dismissedProviderUpdateNotificationKeys: [],
   diffIgnoreWhitespace: true,
-  diffWordWrap: true,
   favorites: [],
+  hiddenCustomSlashCommands: [],
+  hiddenGlobalSlashCommands: [],
+  hiddenProviderSlashCommands: {},
+  collapsedProviderSlashCommandProviders: [],
   providerModelPreferences: {},
   sidebarProjectGroupingMode: "repository_path",
   sidebarProjectGroupingOverrides: {
@@ -29,6 +35,7 @@ const clientSettings: ClientSettings = {
   sidebarThreadSortOrder: "created_at",
   sidebarThreadPreviewCount: 6,
   timestampFormat: "24-hour",
+  wordWrap: true,
 };
 
 const decodeClientSettingsJson = Schema.decodeEffect(Schema.fromJsonString(ClientSettingsSchema));
