@@ -565,6 +565,20 @@ it.layer(TestLayer)("GitVcsDriver core integration", (it) => {
         assert.equal(result.branch, current);
       }),
     );
+
+    it.effect("deletes a local branch ref", () =>
+      Effect.gen(function* () {
+        const cwd = yield* makeTmpDir();
+        yield* initRepoWithCommit(cwd);
+        const driver = yield* GitVcsDriver.GitVcsDriver;
+
+        yield* driver.createRef({ cwd, refName: "feature/delete-me" });
+        yield* driver.deleteRef({ cwd, refName: "feature/delete-me" });
+
+        const branches = yield* git(cwd, ["branch", "--list", "feature/delete-me"]);
+        assert.equal(branches.trim(), "");
+      }),
+    );
   });
 
   describe("worktree operations", () => {
