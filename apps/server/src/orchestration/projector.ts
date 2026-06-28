@@ -207,6 +207,12 @@ export function projectEvent(
             title: payload.title,
             workspaceRoot: payload.workspaceRoot,
             defaultModelSelection: payload.defaultModelSelection,
+            ...(payload.defaultThreadEnvMode !== undefined
+              ? { defaultThreadEnvMode: payload.defaultThreadEnvMode }
+              : {}),
+            ...(payload.defaultWorktreeBaseBranch !== undefined
+              ? { defaultWorktreeBaseBranch: payload.defaultWorktreeBaseBranch }
+              : {}),
             scripts: payload.scripts,
             createdAt: payload.createdAt,
             updatedAt: payload.updatedAt,
@@ -238,6 +244,12 @@ export function projectEvent(
                     : {}),
                   ...(payload.defaultModelSelection !== undefined
                     ? { defaultModelSelection: payload.defaultModelSelection }
+                    : {}),
+                  ...(payload.defaultThreadEnvMode !== undefined
+                    ? { defaultThreadEnvMode: payload.defaultThreadEnvMode }
+                    : {}),
+                  ...(payload.defaultWorktreeBaseBranch !== undefined
+                    ? { defaultWorktreeBaseBranch: payload.defaultWorktreeBaseBranch }
                     : {}),
                   ...(payload.scripts !== undefined ? { scripts: payload.scripts } : {}),
                   updatedAt: payload.updatedAt,

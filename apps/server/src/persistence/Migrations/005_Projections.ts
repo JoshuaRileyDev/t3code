@@ -10,6 +10,8 @@ export default Effect.gen(function* () {
       title TEXT NOT NULL,
       workspace_root TEXT NOT NULL,
       default_model TEXT,
+      default_thread_env_mode TEXT,
+      default_worktree_base_branch TEXT,
       scripts_json TEXT NOT NULL,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL,

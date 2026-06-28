@@ -159,12 +159,17 @@ export function useNewThreadHandler() {
       const draftId = newDraftId();
       const threadId = newThreadId();
       const createdAt = new Date().toISOString();
-      const initialEnvMode = options?.envMode ?? environmentSettings.defaultThreadEnvMode;
+      const projectDefaultEnvMode =
+        project?.defaultThreadEnvMode ?? environmentSettings.defaultThreadEnvMode;
+      const initialEnvMode = options?.envMode ?? projectDefaultEnvMode;
+      const initialBranch =
+        options?.branch ??
+        (initialEnvMode === "worktree" ? (project?.defaultWorktreeBaseBranch ?? null) : null);
       return (async () => {
         setLogicalProjectDraftThreadId(logicalProjectKey, projectRef, draftId, {
           threadId,
           createdAt,
-          branch: options?.branch ?? null,
+          branch: initialBranch,
           worktreePath: options?.worktreePath ?? null,
           envMode: initialEnvMode,
           startFromOrigin:

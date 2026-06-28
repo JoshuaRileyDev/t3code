@@ -8,8 +8,13 @@ import type {
   ThreadId,
 } from "@t3tools/contracts";
 
-export interface EnvironmentProject extends OrchestrationProjectShell {
+export interface EnvironmentProject extends Omit<
+  OrchestrationProjectShell,
+  "defaultThreadEnvMode" | "defaultWorktreeBaseBranch"
+> {
   readonly environmentId: EnvironmentId;
+  readonly defaultThreadEnvMode?: OrchestrationProjectShell["defaultThreadEnvMode"];
+  readonly defaultWorktreeBaseBranch?: OrchestrationProjectShell["defaultWorktreeBaseBranch"];
 }
 
 export interface EnvironmentThreadShell extends OrchestrationThreadShell {

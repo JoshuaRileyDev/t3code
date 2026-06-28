@@ -233,6 +233,12 @@ function mapProjectShellRow(
     workspaceRoot: row.workspaceRoot,
     repositoryIdentity,
     defaultModelSelection: row.defaultModelSelection,
+    ...(row.defaultThreadEnvMode !== undefined
+      ? { defaultThreadEnvMode: row.defaultThreadEnvMode }
+      : {}),
+    ...(row.defaultWorktreeBaseBranch !== undefined
+      ? { defaultWorktreeBaseBranch: row.defaultWorktreeBaseBranch }
+      : {}),
     scripts: row.scripts,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,

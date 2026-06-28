@@ -2190,7 +2190,7 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
         <SidebarMenuButton
           ref={isManualProjectSorting ? dragHandleProps?.setActivatorNodeRef : undefined}
           size="sm"
-          className={`gap-2 px-2 py-1.5 pr-8 text-left hover:bg-accent group-hover/project-header:bg-accent group-hover/project-header:text-sidebar-accent-foreground max-sm:pr-14 ${
+          className={`gap-2 px-2 py-1.5 pr-14 text-left hover:bg-accent group-hover/project-header:bg-accent group-hover/project-header:text-sidebar-accent-foreground max-sm:pr-20 ${
             isManualProjectSorting ? "cursor-grab active:cursor-grabbing" : "cursor-pointer"
           }`}
           {...(isManualProjectSorting && dragHandleProps ? dragHandleProps.attributes : {})}
@@ -2283,6 +2283,29 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
           <TooltipPopup side="top">
             {newThreadShortcutLabel ? `New thread (${newThreadShortcutLabel})` : "New thread"}
           </TooltipPopup>
+        </Tooltip>
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <div className="pointer-events-none absolute top-[calc(50%+1px)] right-8 -translate-y-1/2 opacity-0 transition-opacity duration-150 max-sm:pointer-events-auto max-sm:opacity-100 group-hover/project-header:pointer-events-auto group-hover/project-header:opacity-100 group-focus-within/project-header:pointer-events-auto group-focus-within/project-header:opacity-100">
+                <Link
+                  aria-label={`Project settings for ${project.displayName}`}
+                  className={`${SIDEBAR_ICON_ACTION_BUTTON_CLASS} pointer-events-auto`}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                  }}
+                  to="/settings/project/$environmentId/$projectId"
+                  params={{
+                    environmentId: project.environmentId,
+                    projectId: project.id,
+                  }}
+                >
+                  <SettingsIcon className="size-3.5" />
+                </Link>
+              </div>
+            }
+          />
+          <TooltipPopup side="top">Project settings</TooltipPopup>
         </Tooltip>
       </div>
 
