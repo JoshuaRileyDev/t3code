@@ -46,6 +46,7 @@ import {
   OrchestrationReplayEventsError,
   type FilesystemBrowseFailure,
   FilesystemBrowseError,
+  type ChatAttachment,
   AssetWorkspaceContextNotFoundError,
   AssetWorkspaceContextResolutionError,
   EnvironmentAuthorizationError,
@@ -57,6 +58,7 @@ import {
   WS_METHODS,
   WsRpcGroup,
 } from "@t3tools/contracts";
+import { buildGeneratedWorktreeBranchName } from "@t3tools/shared/git";
 import { clamp } from "effect/Number";
 import { HttpRouter, HttpServerRequest, HttpServerRespondable } from "effect/unstable/http";
 import { RpcSerialization, RpcServer } from "effect/unstable/rpc";
@@ -78,6 +80,7 @@ import * as ProviderMaintenanceRunner from "./provider/providerMaintenanceRunner
 import * as ServerLifecycleEvents from "./serverLifecycleEvents.ts";
 import * as ServerRuntimeStartup from "./serverRuntimeStartup.ts";
 import * as ServerSettings from "./serverSettings.ts";
+import { TextGeneration } from "./textGeneration/TextGeneration.ts";
 import * as TerminalManager from "./terminal/Manager.ts";
 import * as PreviewAutomationBroker from "./mcp/PreviewAutomationBroker.ts";
 import * as PreviewManager from "./preview/Manager.ts";
@@ -408,6 +411,7 @@ const makeWsRpcLayer = (currentSession: EnvironmentAuth.AuthenticatedSession) =>
       const config = yield* ServerConfig.ServerConfig;
       const lifecycleEvents = yield* ServerLifecycleEvents.ServerLifecycleEvents;
       const serverSettings = yield* ServerSettings.ServerSettingsService;
+      const textGeneration = yield* TextGeneration;
       const startup = yield* ServerRuntimeStartup.ServerRuntimeStartup;
       const workspaceEntries = yield* WorkspaceEntries.WorkspaceEntries;
       const workspaceFileSystem = yield* WorkspaceFileSystem.WorkspaceFileSystem;
@@ -427,6 +431,39 @@ const makeWsRpcLayer = (currentSession: EnvironmentAuth.AuthenticatedSession) =>
       );
       const sourceControlRepositories =
         yield* SourceControlRepositoryService.SourceControlRepositoryService;
+      const resolveBootstrapWorktreeBranch = Effect.fn("resolveBootstrapWorktreeBranch")(
+        function* (input: {
+          readonly cwd: string;
+          readonly messageText: string;
+          readonly attachments: ReadonlyArray<ChatAttachment>;
+        }) {
+          const { textGenerationModelSelection: modelSelection } =
+            yield* serverSettings.getSettings;
+          return yield* textGeneration
+            .generateBranchName({
+              cwd: input.cwd,
+              message: input.messageText,
+              ...(input.attachments.length > 0 ? { attachments: input.attachments } : {}),
+              modelSelection,
+            })
+            .pipe(
+              Effect.map((generated) => buildGeneratedWorktreeBranchName(generated.branch)),
+              Effect.catchCause((cause) =>
+                Effect.gen(function* () {
+                  yield* Effect.logWarning("failed to generate AI worktree branch name", {
+                    cwd: input.cwd,
+                    detail: Cause.pretty(cause),
+                  });
+                  const fallbackBranch = yield* crypto.randomUUIDv4.pipe(
+                    Effect.map((value) => `t3code/${value.replace(/-/g, "").slice(0, 8)}`),
+                  );
+                  return fallbackBranch;
+                }),
+              ),
+            );
+        },
+      );
+
       const bootstrapCredentials = yield* PairingGrantStore.PairingGrantStore;
       const sessions = yield* SessionStore.SessionStore;
       const processDiagnostics = yield* ProcessDiagnostics.ProcessDiagnostics;
@@ -845,10 +882,17 @@ const makeWsRpcLayer = (currentSession: EnvironmentAuth.AuthenticatedSession) =>
                 });
                 worktreeBaseRef = resolvedRemoteBase.commitSha;
               }
+              const worktreeBranch =
+                bootstrap.prepareWorktree.branch ??
+                (yield* resolveBootstrapWorktreeBranch({
+                  cwd: bootstrap.prepareWorktree.projectCwd,
+                  messageText: command.message.text,
+                  attachments: command.message.attachments,
+                }));
               const worktree = yield* gitWorkflow.createWorktree({
                 cwd: bootstrap.prepareWorktree.projectCwd,
                 refName: worktreeBaseRef,
-                newRefName: bootstrap.prepareWorktree.branch,
+                newRefName: worktreeBranch,
                 baseRefName: bootstrap.prepareWorktree.baseBranch,
                 path: null,
               });

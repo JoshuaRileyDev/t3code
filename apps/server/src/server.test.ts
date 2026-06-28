@@ -112,6 +112,7 @@ import * as CloudCliTokenManager from "./cloud/CliTokenManager.ts";
 import * as ProcessDiagnostics from "./diagnostics/ProcessDiagnostics.ts";
 import * as ProcessResourceMonitor from "./diagnostics/ProcessResourceMonitor.ts";
 import * as TraceDiagnostics from "./diagnostics/TraceDiagnostics.ts";
+import * as TextGeneration from "./textGeneration/TextGeneration.ts";
 import * as Data from "effect/Data";
 
 const defaultProjectId = ProjectId.make("project-default");
@@ -318,6 +319,7 @@ const buildAppUnderTest = (options?: {
     keybindings?: Partial<Keybindings.Keybindings["Service"]>;
     providerRegistry?: Partial<ProviderRegistry.ProviderRegistry["Service"]>;
     serverSettings?: Partial<ServerSettings.ServerSettingsService["Service"]>;
+    textGeneration?: Partial<TextGeneration.TextGeneration["Service"]>;
     externalLauncher?: Partial<ExternalLauncher.ExternalLauncher["Service"]>;
     vcsDriver?: Partial<VcsDriver.VcsDriver["Service"]>;
     vcsDriverRegistry?: Partial<VcsDriverRegistry.VcsDriverRegistry["Service"]>;
@@ -556,6 +558,18 @@ const buildAppUnderTest = (options?: {
           updateSettings: () => Effect.succeed(DEFAULT_SERVER_SETTINGS),
           streamChanges: Stream.empty,
           ...options?.layers?.serverSettings,
+        }),
+      ),
+      Layer.provide(
+        Layer.mock(TextGeneration.TextGeneration)({
+          generateCommitMessage: () =>
+            Effect.die(new Error("Unexpected text generation commit message request.")),
+          generatePrContent: () => Effect.die(new Error("Unexpected text generation PR request.")),
+          generateBranchName: () =>
+            Effect.die(new Error("Unexpected text generation branch request.")),
+          generateThreadTitle: () =>
+            Effect.die(new Error("Unexpected text generation thread title request.")),
+          ...options?.layers?.textGeneration,
         }),
       ),
       Layer.provide(
@@ -6208,6 +6222,101 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
           assert.equal(finalCommand.bootstrap, undefined);
         }
       }).pipe(Effect.provide(NodeHttpServer.layerTest)),
+  );
+
+  it.effect("uses the first message to generate a bootstrap worktree branch", () =>
+    Effect.gen(function* () {
+      const createWorktree = vi.fn(
+        (_: Parameters<GitVcsDriver.GitVcsDriver["Service"]["createWorktree"]>[0]) =>
+          Effect.succeed({
+            worktree: {
+              refName: "t3code/feature-fix-reconnect-spinner",
+              path: "/tmp/bootstrap-worktree",
+            },
+          }),
+      );
+      const generateBranchName = vi.fn(
+        (_: Parameters<TextGeneration.TextGeneration["Service"]["generateBranchName"]>[0]) =>
+          Effect.succeed({ branch: "Feature: fix reconnect spinner!" }),
+      );
+
+      yield* buildAppUnderTest({
+        layers: {
+          gitVcsDriver: {
+            createWorktree,
+          },
+          textGeneration: {
+            generateBranchName,
+          },
+          orchestrationEngine: {
+            dispatch: () => Effect.succeed({ sequence: 1 }),
+            readEvents: () => Stream.empty,
+          },
+          projectSetupScriptRunner: {
+            runForThread: () =>
+              Effect.succeed({
+                status: "started" as const,
+                scriptId: "setup",
+                scriptName: "Setup",
+                terminalId: "setup-setup",
+                cwd: "/tmp/bootstrap-worktree",
+              }),
+          },
+        },
+      });
+
+      const createdAt = "2026-01-01T00:00:00.000Z";
+      const wsUrl = yield* getWsServerUrl("/ws");
+      yield* Effect.scoped(
+        withWsRpcClient(wsUrl, (client) =>
+          client[ORCHESTRATION_WS_METHODS.dispatchCommand]({
+            type: "thread.turn.start",
+            commandId: CommandId.make("cmd-bootstrap-turn-start-ai-branch"),
+            threadId: ThreadId.make("thread-bootstrap-ai-branch"),
+            message: {
+              messageId: MessageId.make("msg-bootstrap-ai-branch"),
+              role: "user",
+              text: "Fix reconnect spinner after resume",
+              attachments: [],
+            },
+            modelSelection: defaultModelSelection,
+            runtimeMode: "full-access",
+            interactionMode: "default",
+            bootstrap: {
+              createThread: {
+                projectId: defaultProjectId,
+                title: "Bootstrap Thread",
+                modelSelection: defaultModelSelection,
+                runtimeMode: "full-access",
+                interactionMode: "default",
+                branch: "main",
+                worktreePath: null,
+                createdAt,
+              },
+              prepareWorktree: {
+                projectCwd: "/tmp/project",
+                baseBranch: "main",
+              },
+              runSetupScript: true,
+            },
+            createdAt,
+          }),
+        ),
+      );
+
+      assert.deepEqual(generateBranchName.mock.calls[0]?.[0], {
+        cwd: "/tmp/project",
+        message: "Fix reconnect spinner after resume",
+        modelSelection: defaultModelSelection,
+      });
+      assert.deepEqual(createWorktree.mock.calls[0]?.[0], {
+        cwd: "/tmp/project",
+        refName: "main",
+        newRefName: "t3code/feature-fix-reconnect-spinner",
+        baseRefName: "main",
+        path: null,
+      });
+    }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
 
   it.effect("records setup-script failures without aborting bootstrap turn start", () =>

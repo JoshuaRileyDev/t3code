@@ -3,6 +3,7 @@ import { describe, expect, it } from "vite-plus/test";
 
 import {
   applyGitStatusStreamEvent,
+  buildGeneratedWorktreeBranchName,
   buildTemporaryWorktreeBranchName,
   isTemporaryWorktreeBranch,
   normalizeGitRemoteUrl,
@@ -75,6 +76,18 @@ describe("isTemporaryWorktreeBranch", () => {
     expect(isTemporaryWorktreeBranch(`${WORKTREE_BRANCH_PREFIX}/feature/demo`)).toBe(false);
     expect(isTemporaryWorktreeBranch("main")).toBe(false);
     expect(isTemporaryWorktreeBranch(`${WORKTREE_BRANCH_PREFIX}/deadbeef-extra`)).toBe(false);
+  });
+});
+
+describe("buildGeneratedWorktreeBranchName", () => {
+  it("sanitizes semantic branch names into the worktree namespace", () => {
+    expect(buildGeneratedWorktreeBranchName("Refs/heads/Feature: fix reconnect spinner!")).toBe(
+      "t3code/feature-fix-reconnect-spinner",
+    );
+  });
+
+  it("falls back to update for empty input", () => {
+    expect(buildGeneratedWorktreeBranchName("   ")).toBe("t3code/update");
   });
 });
 
