@@ -26,6 +26,7 @@ export type SettingsSectionPath =
   | "/settings/general"
   | "/settings/keybindings"
   | "/settings/providers"
+  | "/settings/mcp"
   | "/settings/source-control"
   | "/settings/connections"
   | "/settings/archived";
@@ -38,6 +39,7 @@ export const SETTINGS_NAV_ITEMS: ReadonlyArray<{
   { label: "General", to: "/settings/general", icon: Settings2Icon },
   { label: "Keybindings", to: "/settings/keybindings", icon: KeyboardIcon },
   { label: "Providers", to: "/settings/providers", icon: BotIcon },
+  { label: "MCP Servers", to: "/settings/mcp", icon: BotIcon },
   { label: "Source Control", to: "/settings/source-control", icon: GitBranchIcon },
   { label: "Connections", to: "/settings/connections", icon: Link2Icon },
   { label: "Archive", to: "/settings/archived", icon: ArchiveIcon },
@@ -52,7 +54,7 @@ export function SettingsSidebarNav({ pathname }: { pathname: string }) {
       if (isMobile) {
         setOpenMobile(false);
       }
-      void navigate({ to, replace: true });
+      void navigate({ to: to as never, replace: true });
     },
     [isMobile, navigate, setOpenMobile],
   );

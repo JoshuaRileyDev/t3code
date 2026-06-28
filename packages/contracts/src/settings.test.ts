@@ -19,6 +19,8 @@ describe("ServerSettings.providerInstances (slice-2 invariant)", () => {
     // Legacy `providers` struct is still hydrated with its per-driver defaults
     // so existing call sites keep working through the migration.
     expect(decoded.providers.codex.enabled).toBe(true);
+    expect(decoded.providers.codex.mcpServers).toEqual({});
+    expect(decoded.providers.claudeAgent.mcpServers).toEqual({});
   });
 
   it("decodes a multi-instance map mixing first-party and fork drivers", () => {
@@ -118,13 +120,30 @@ describe("ServerSettingsPatch string normalization", () => {
         codex: {
           binaryPath: "  /opt/homebrew/bin/codex  ",
           homePath: "  ~/.codex  ",
+          mcpServers: {
+            docs: {
+              transport: "http",
+              url: "  https://developers.openai.com/mcp  ",
+              headers: {},
+            },
+          },
         },
       },
       providerInstances: {
         codex_personal: {
           driver: "  codex  ",
           displayName: "  Codex Personal  ",
-          config: { homePath: "  ~/.codex-personal  " },
+          config: {
+            homePath: "  ~/.codex-personal  ",
+            mcpServers: {
+              github: {
+                transport: "command",
+                command: "  npx  ",
+                args: ["  -y  "],
+                env: {},
+              },
+            },
+          },
         },
       },
     });
@@ -134,6 +153,7 @@ describe("ServerSettingsPatch string normalization", () => {
     expect(patch.observability?.otlpTracesUrl).toBe("http://localhost:4318/v1/traces");
     expect(patch.providers?.codex?.binaryPath).toBe("/opt/homebrew/bin/codex");
     expect(patch.providers?.codex?.homePath).toBe("~/.codex");
+    expect(patch.providers?.codex?.mcpServers?.docs?.transport).toBe("http");
     expect(patch.providerInstances?.[ProviderInstanceId.make("codex_personal")]?.driver).toBe(
       "codex",
     );
@@ -142,6 +162,14 @@ describe("ServerSettingsPatch string normalization", () => {
     );
     expect(patch.providerInstances?.[ProviderInstanceId.make("codex_personal")]?.config).toEqual({
       homePath: "  ~/.codex-personal  ",
+      mcpServers: {
+        github: {
+          transport: "command",
+          command: "npx",
+          args: ["  -y  "],
+          env: {},
+        },
+      },
     });
   });
 

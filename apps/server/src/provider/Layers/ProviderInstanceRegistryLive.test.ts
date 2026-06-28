@@ -62,6 +62,7 @@ const makeCodexConfig = (overrides: Partial<CodexSettings>): CodexSettings => ({
   homePath: "",
   shadowHomePath: "",
   customModels: [],
+  mcpServers: {},
   ...overrides,
 });
 
@@ -71,6 +72,7 @@ const makeClaudeConfig = (overrides: Partial<ClaudeSettings>): ClaudeSettings =>
   homePath: "",
   customModels: [],
   launchArgs: "",
+  mcpServers: {},
   ...overrides,
 });
 

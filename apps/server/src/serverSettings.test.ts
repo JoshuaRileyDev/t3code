@@ -180,6 +180,7 @@ it.layer(NodeServices.layer)("server settings", (it) => {
         homePath: "/Users/julius/.codex",
         shadowHomePath: "",
         customModels: [],
+        mcpServers: {},
       });
       assert.deepEqual(next.providers.claudeAgent, {
         enabled: true,
@@ -187,6 +188,7 @@ it.layer(NodeServices.layer)("server settings", (it) => {
         homePath: "",
         customModels: ["claude-custom"],
         launchArgs: "",
+        mcpServers: {},
       });
       assert.deepEqual(
         next.textGenerationModelSelection,
@@ -421,6 +423,7 @@ it.layer(NodeServices.layer)("server settings", (it) => {
         homePath: "",
         shadowHomePath: "",
         customModels: [],
+        mcpServers: {},
       });
       assert.deepEqual(next.providers.claudeAgent, {
         enabled: true,
@@ -428,6 +431,7 @@ it.layer(NodeServices.layer)("server settings", (it) => {
         homePath: "",
         customModels: [],
         launchArgs: "",
+        mcpServers: {},
       });
       assert.deepEqual(next.providers.opencode, {
         enabled: true,

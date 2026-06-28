@@ -7,6 +7,7 @@ import {
   ApprovalRequestId,
   CodexSettings,
   EventId,
+  EnvironmentId,
   ProviderDriverKind,
   ProviderInstanceId,
   ProviderItemId,
@@ -33,6 +34,7 @@ import * as Schema from "effect/Schema";
 import * as Scope from "effect/Scope";
 import * as Stream from "effect/Stream";
 import * as CodexErrors from "effect-codex-app-server/errors";
+import * as McpProviderSession from "../../mcp/McpProviderSession.ts";
 
 import { ServerConfig } from "../../config.ts";
 import { ServerSettingsService } from "../../serverSettings.ts";
@@ -286,6 +288,53 @@ validationLayer("CodexAdapterLive validation", (it) => {
         runtimeMode: "full-access",
       });
     }),
+  );
+
+  it.effect("merges provider and session MCP server args", () =>
+    Effect.gen(function* () {
+      validationRuntimeFactory.factory.mockClear();
+      McpProviderSession.clearAllMcpProviderSessions();
+      McpProviderSession.setMcpProviderSession({
+        environmentId: EnvironmentId.make("env-1"),
+        threadId: asThreadId("thread-merge-mcp"),
+        providerSessionId: "provider-session-1",
+        providerInstanceId: ProviderInstanceId.make("codex"),
+        endpoint: "http://localhost:8787/mcp",
+        authorizationHeader: "Bearer secret-token",
+      });
+
+      const codexConfig = decodeCodexSettings({
+        mcpServers: {
+          docs: {
+            transport: "http",
+            url: "https://example.com/mcp",
+            headers: { Authorization: "Bearer token" },
+          },
+        },
+      });
+      const adapter = yield* makeCodexAdapter(codexConfig, {
+        makeRuntime: validationRuntimeFactory.factory,
+      });
+
+      yield* adapter.startSession({
+        provider: ProviderDriverKind.make("codex"),
+        threadId: asThreadId("thread-merge-mcp"),
+        runtimeMode: "full-access",
+      });
+
+      NodeAssert.deepStrictEqual(validationRuntimeFactory.lastRuntime?.options.appServerArgs, [
+        "-c",
+        'mcp_servers.docs.type="http"',
+        "-c",
+        'mcp_servers.docs.url="https://example.com/mcp"',
+        "-c",
+        'mcp_servers.docs.headers={ Authorization = "Bearer token" }',
+        "-c",
+        'mcp_servers.t3-code.url="http://localhost:8787/mcp"',
+        "-c",
+        'mcp_servers.t3-code.bearer_token_env_var="T3_MCP_BEARER_TOKEN"',
+      ]);
+    }).pipe(Effect.ensuring(Effect.sync(() => McpProviderSession.clearAllMcpProviderSessions()))),
   );
 });
 
