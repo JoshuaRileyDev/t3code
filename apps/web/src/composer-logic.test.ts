@@ -81,6 +81,20 @@ describe("detectComposerTrigger", () => {
     });
   });
 
+  it("detects slash commands in the middle of existing text", () => {
+    const text = "Please run /pla next";
+    const cursorAfterQuery = "Please run /pla".length;
+
+    const trigger = detectComposerTrigger(text, cursorAfterQuery);
+
+    expect(trigger).toEqual({
+      kind: "slash-command",
+      query: "pla",
+      rangeStart: "Please run ".length,
+      rangeEnd: cursorAfterQuery,
+    });
+  });
+
   it("detects $skill trigger at cursor", () => {
     const text = "Use $gh-fi";
     const trigger = detectComposerTrigger(text, text.length);

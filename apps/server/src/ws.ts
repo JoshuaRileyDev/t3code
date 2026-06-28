@@ -77,6 +77,7 @@ import {
 import * as ProviderRegistry from "./provider/Services/ProviderRegistry.ts";
 import * as ProviderMaintenanceRunner from "./provider/providerMaintenanceRunner.ts";
 import * as ServerLifecycleEvents from "./serverLifecycleEvents.ts";
+import { appendServerLogLine } from "./integrations.ts";
 import * as ServerRuntimeStartup from "./serverRuntimeStartup.ts";
 import * as Integrations from "./integrations.ts";
 import * as ServerSettings from "./serverSettings.ts";
@@ -1244,7 +1245,19 @@ const makeWsRpcLayer = (currentSession: EnvironmentAuth.AuthenticatedSession) =>
                   );
                 }
 
-                const settings = yield* serverSettings.getSettings;
+                const settings = yield* serverSettings.getSettings.pipe(
+                  Effect.catchAll((error) =>
+                    Effect.fail(
+                      new IntegrationAccountTokenValidationError({
+                        kind: input.kind,
+                        detail:
+                          error instanceof Error
+                            ? error.message
+                            : "Unable to read server settings.",
+                      }),
+                    ),
+                  ),
+                );
                 const accounts = settings.integrations[input.kind];
                 const account = accounts.find((candidate) => candidate.id === input.accountId);
                 if (account === undefined) {
@@ -1284,6 +1297,184 @@ const makeWsRpcLayer = (currentSession: EnvironmentAuth.AuthenticatedSession) =>
                 ...(input.baseUrl !== undefined ? { baseUrl: input.baseUrl } : {}),
                 apiKey: input.apiKey,
               });
+            }),
+            {
+              "rpc.aggregate": "server",
+            },
+          ),
+        [WS_METHODS.serverListIntegrationRepositories]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.serverListIntegrationRepositories,
+            Effect.gen(function* () {
+              const serverLogPath = config.serverLogPath;
+              const writeLogLine = (message: string, annotations?: Record<string, unknown>) =>
+                appendServerLogLine(serverLogPath, message, annotations);
+              const environment = yield* serverEnvironment.getDescriptor;
+              yield* Effect.logInfo("rpc list integration repositories received", {
+                environmentId: environment.environmentId,
+                environmentLabel: environment.label,
+                integrationKind: input.kind,
+                accountId: input.accountId ?? null,
+                hasApiKey: input.apiKey !== undefined,
+                useStoredToken: input.useStoredToken ?? false,
+                baseUrl: input.baseUrl ?? null,
+              });
+              yield* writeLogLine("rpc list integration repositories received", {
+                environmentId: environment.environmentId,
+                environmentLabel: environment.label,
+                integrationKind: input.kind,
+                accountId: input.accountId ?? null,
+                hasApiKey: input.apiKey !== undefined,
+                useStoredToken: input.useStoredToken ?? false,
+                baseUrl: input.baseUrl ?? null,
+              });
+              if ((input.useStoredToken ?? false) || input.apiKey === undefined) {
+                if (input.accountId === undefined) {
+                  yield* Effect.logInfo(
+                    "rpc list integration repositories failed; missing account id for stored token",
+                    {
+                      environmentId: environment.environmentId,
+                      environmentLabel: environment.label,
+                      integrationKind: input.kind,
+                    },
+                  );
+                  yield* writeLogLine(
+                    "rpc list integration repositories failed; missing account id for stored token",
+                    {
+                      environmentId: environment.environmentId,
+                      environmentLabel: environment.label,
+                      integrationKind: input.kind,
+                    },
+                  );
+                  return yield* Effect.fail(
+                    new IntegrationAccountTokenValidationError({
+                      kind: input.kind,
+                      detail: "An account id is required to list repositories for a stored token.",
+                    }),
+                  );
+                }
+
+                const settings = yield* serverSettings.getSettings.pipe(
+                  Effect.catchAll((error) =>
+                    Effect.fail(
+                      new IntegrationAccountTokenValidationError({
+                        kind: input.kind,
+                        detail:
+                          error instanceof Error
+                            ? error.message
+                            : "Unable to read server settings.",
+                      }),
+                    ),
+                  ),
+                );
+                const accounts = settings.integrations[input.kind];
+                yield* Effect.logInfo(
+                  "rpc list integration repositories inspecting stored accounts",
+                  {
+                    environmentId: environment.environmentId,
+                    environmentLabel: environment.label,
+                    integrationKind: input.kind,
+                    accountId: input.accountId,
+                    storedAccountCount: accounts.length,
+                  },
+                );
+                yield* writeLogLine(
+                  "rpc list integration repositories inspecting stored accounts",
+                  {
+                    environmentId: environment.environmentId,
+                    environmentLabel: environment.label,
+                    integrationKind: input.kind,
+                    accountId: input.accountId,
+                    storedAccountCount: accounts.length,
+                  },
+                );
+                const account = accounts.find((candidate) => candidate.id === input.accountId);
+                if (account === undefined) {
+                  yield* Effect.logInfo(
+                    "rpc list integration repositories failed; stored account not found",
+                    {
+                      environmentId: environment.environmentId,
+                      environmentLabel: environment.label,
+                      integrationKind: input.kind,
+                      accountId: input.accountId,
+                    },
+                  );
+                  yield* writeLogLine(
+                    "rpc list integration repositories failed; stored account not found",
+                    {
+                      environmentId: environment.environmentId,
+                      environmentLabel: environment.label,
+                      integrationKind: input.kind,
+                      accountId: input.accountId,
+                    },
+                  );
+                  return yield* Effect.fail(
+                    new IntegrationAccountTokenValidationError({
+                      kind: input.kind,
+                      detail: "Stored integration account not found.",
+                    }),
+                  );
+                }
+
+                if (account.apiKey.length === 0) {
+                  yield* Effect.logInfo(
+                    "rpc list integration repositories failed; stored token unavailable",
+                    {
+                      environmentId: environment.environmentId,
+                      environmentLabel: environment.label,
+                      integrationKind: input.kind,
+                      accountId: input.accountId,
+                    },
+                  );
+                  yield* writeLogLine(
+                    "rpc list integration repositories failed; stored token unavailable",
+                    {
+                      environmentId: environment.environmentId,
+                      environmentLabel: environment.label,
+                      integrationKind: input.kind,
+                      accountId: input.accountId,
+                    },
+                  );
+                  return yield* Effect.fail(
+                    new IntegrationAccountTokenValidationError({
+                      kind: input.kind,
+                      detail: "Stored integration token is unavailable.",
+                    }),
+                  );
+                }
+
+                return yield* Integrations.listIntegrationRepositories(
+                  {
+                    kind: input.kind,
+                    accountId: account.id,
+                    ...(account.baseUrl !== undefined ? { baseUrl: account.baseUrl } : {}),
+                    apiKey: account.apiKey,
+                  },
+                  config.serverLogPath,
+                );
+              }
+
+              yield* Effect.logInfo("rpc list integration repositories using explicit api key", {
+                environmentId: environment.environmentId,
+                environmentLabel: environment.label,
+                integrationKind: input.kind,
+                accountId: input.accountId ?? null,
+              });
+              yield* writeLogLine("rpc list integration repositories using explicit api key", {
+                environmentId: environment.environmentId,
+                environmentLabel: environment.label,
+                integrationKind: input.kind,
+                accountId: input.accountId ?? null,
+              });
+              return yield* Integrations.listIntegrationRepositories(
+                {
+                  kind: input.kind,
+                  ...(input.accountId !== undefined ? { accountId: input.accountId } : {}),
+                  ...(input.baseUrl !== undefined ? { baseUrl: input.baseUrl } : {}),
+                  apiKey: input.apiKey,
+                },
+                config.serverLogPath,
+              );
             }),
             {
               "rpc.aggregate": "server",

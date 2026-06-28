@@ -255,24 +255,21 @@ export const isCollapsedCursorAdjacentToMention = isCollapsedCursorAdjacentToInl
 
 export function detectComposerTrigger(text: string, cursorInput: number): ComposerTrigger | null {
   const cursor = clampCursor(text, cursorInput);
-  const lineStart = text.lastIndexOf("\n", Math.max(0, cursor - 1)) + 1;
-  const linePrefix = text.slice(lineStart, cursor);
+  const tokenStart = tokenStartForCursor(text, cursor);
+  const token = text.slice(tokenStart, cursor);
 
-  if (linePrefix.startsWith("/")) {
-    const commandMatch = /^\/(\S*)$/.exec(linePrefix);
-    if (commandMatch) {
-      const commandQuery = commandMatch[1] ?? "";
+  if (token.startsWith("/")) {
+    const commandQuery = token.slice(1);
+    if (!/\s/u.test(commandQuery)) {
       return {
         kind: "slash-command",
         query: commandQuery,
-        rangeStart: lineStart,
+        rangeStart: tokenStart,
         rangeEnd: cursor,
       };
     }
   }
 
-  const tokenStart = tokenStartForCursor(text, cursor);
-  const token = text.slice(tokenStart, cursor);
   if (token.startsWith("$")) {
     return {
       kind: "skill",

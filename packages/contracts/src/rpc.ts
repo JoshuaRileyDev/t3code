@@ -217,6 +217,7 @@ export const WS_METHODS = {
   serverGetSettings: "server.getSettings",
   serverUpdateSettings: "server.updateSettings",
   serverTestIntegrationToken: "server.testIntegrationToken",
+  serverListIntegrationRepositories: "server.listIntegrationRepositories",
   serverDiscoverSourceControl: "server.discoverSourceControl",
   serverGetTraceDiagnostics: "server.getTraceDiagnostics",
   serverGetProcessDiagnostics: "server.getProcessDiagnostics",
@@ -298,6 +299,19 @@ export const WsServerTestIntegrationTokenRpc = Rpc.make(WS_METHODS.serverTestInt
   success: IntegrationAccountTokenValidationResult,
   error: Schema.Union([IntegrationAccountTokenValidationError, EnvironmentAuthorizationError]),
 });
+
+export const WsServerListIntegrationRepositoriesRpc = Rpc.make(
+  WS_METHODS.serverListIntegrationRepositories,
+  {
+    payload: IntegrationAccountTokenValidationInput,
+    success: Schema.Array(SourceControlRepositoryInfo),
+    error: Schema.Union([
+      IntegrationAccountTokenValidationError,
+      EnvironmentAuthorizationError,
+      ServerSettingsError,
+    ]),
+  },
+);
 
 export const WsServerDiscoverSourceControlRpc = Rpc.make(WS_METHODS.serverDiscoverSourceControl, {
   payload: Schema.Struct({}),
@@ -709,6 +723,7 @@ export const WsRpcGroup = RpcGroup.make(
   WsServerGetSettingsRpc,
   WsServerUpdateSettingsRpc,
   WsServerTestIntegrationTokenRpc,
+  WsServerListIntegrationRepositoriesRpc,
   WsServerDiscoverSourceControlRpc,
   WsServerGetTraceDiagnosticsRpc,
   WsServerGetProcessDiagnosticsRpc,

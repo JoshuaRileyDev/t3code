@@ -315,9 +315,7 @@ function AccountDialog({
       accountName: trimmedName,
       ...(normalizedBaseUrl !== null ? { baseUrl: normalizedBaseUrl } : {}),
       ...(state.account?.id !== undefined ? { accountId: state.account.id } : {}),
-      ...(preserveSavedToken
-        ? { useStoredToken: true }
-        : { apiKey: trimmedKey }),
+      ...(preserveSavedToken ? { useStoredToken: true } : { apiKey: trimmedKey }),
     };
 
     try {

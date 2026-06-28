@@ -329,9 +329,24 @@ const rpcRequestObserverLayer = Layer.succeed(
         nextObservedRpcRequestId += 1;
         const requestId = `${environmentId}:${nextObservedRpcRequestId}`;
         trackRpcRequestSent(requestId, `${method} · ${environmentId}`);
-        return Effect.sync(() => {
-          acknowledgeRpcRequest(requestId);
-        });
+        return Effect.logInfo("rpc request sent", {
+          requestId,
+          environmentId,
+          method,
+        }).pipe(
+          Effect.tap(() =>
+            Effect.sync(() => {
+              acknowledgeRpcRequest(requestId);
+            }),
+          ),
+          Effect.tap(() =>
+            Effect.logInfo("rpc request acknowledged", {
+              requestId,
+              environmentId,
+              method,
+            }),
+          ),
+        );
       }),
   }),
 );
