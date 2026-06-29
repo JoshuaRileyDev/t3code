@@ -46,6 +46,7 @@ import type {
   ServerTraceDiagnosticsResult,
   ServerUpsertKeybindingResult,
 } from "./server.ts";
+import type { IntegrationAccountTokenValidationInput as IntegrationAccountTokenValidationInputSettings } from "./settings.ts";
 import type {
   TerminalAttachInput,
   TerminalAttachStreamEvent,
@@ -1105,6 +1106,9 @@ export interface EnvironmentApi {
       input: SourceControlPublishRepositoryInput,
     ) => Promise<SourceControlPublishRepositoryResult>;
   };
+  listIntegrationRepositories: (
+    input: IntegrationAccountTokenValidationInputSettings,
+  ) => Promise<ReadonlyArray<SourceControlRepositoryInfo>>;
   vcs: {
     listRefs: (input: VcsListRefsInput) => Promise<VcsListRefsResult>;
     createWorktree: (input: VcsCreateWorktreeInput) => Promise<VcsCreateWorktreeResult>;

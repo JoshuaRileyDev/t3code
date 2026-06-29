@@ -19,6 +19,7 @@ import {
   stripInlineTerminalContextPlaceholders,
   type TerminalContextDraft,
 } from "../lib/terminalContext";
+import { isLatestTurnSettled } from "../session-logic";
 import type { DraftThreadEnvMode } from "../composerDraftStore";
 
 export const LAST_INVOKED_SCRIPT_BY_PROJECT_KEY = "t3code:last-invoked-script-by-project";
@@ -363,6 +364,49 @@ export async function waitForStartedServerThread(
     });
 
     if (threadHasStarted(getThread())) {
+      finish(true);
+      return;
+    }
+
+    timeoutId = globalThis.setTimeout(() => {
+      finish(false);
+    }, timeoutMs);
+  });
+}
+
+export async function waitForSettledServerThread(
+  threadRef: ScopedThreadRef,
+  timeoutMs = 30_000,
+): Promise<boolean> {
+  const threadAtom = environmentThreadDetails.detailAtom(threadRef);
+  const getThread = () => appAtomRegistry.get(threadAtom);
+  const isSettled = () =>
+    isLatestTurnSettled(getThread()?.latestTurn ?? null, getThread()?.session ?? null);
+
+  if (isSettled()) {
+    return true;
+  }
+
+  return await new Promise<boolean>((resolve) => {
+    let settled = false;
+    let timeoutId: ReturnType<typeof globalThis.setTimeout> | null = null;
+    const finish = (result: boolean) => {
+      if (settled) return;
+      settled = true;
+      if (timeoutId !== null) {
+        globalThis.clearTimeout(timeoutId);
+      }
+      unsubscribe();
+      resolve(result);
+    };
+
+    const unsubscribe = appAtomRegistry.subscribe(threadAtom, () => {
+      if (isSettled()) {
+        finish(true);
+      }
+    });
+
+    if (isSettled()) {
       finish(true);
       return;
     }
