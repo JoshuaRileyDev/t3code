@@ -74,6 +74,7 @@ const config: ExpoConfig = {
     fallbackToCacheTimeout: 0,
   },
   ios: {
+    deploymentTarget: "18.0",
     icon: variant.iosIcon,
     supportsTablet: true,
     bundleIdentifier: variant.iosBundleIdentifier,
