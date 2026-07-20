@@ -132,10 +132,6 @@ function forEachMentionMatch(
   });
 }
 
-function splitPromptTextIntoComposerSegments(text: string): ComposerPromptSegment[] {
-  return splitPromptTextIntoComposerSegmentsWithSlashCommands(text, []);
-}
-
 function splitPromptTextIntoComposerSegmentsWithSlashCommands(
   text: string,
   slashCommands: ReadonlyArray<ComposerSlashCommandLike>,

@@ -41,7 +41,6 @@ describe("searchSlashCommandItems", () => {
 
     expect(searchSlashCommandItems(items, "ui").map((item) => item.id)).toEqual([
       "provider-slash-command:claudeAgent:ui",
-      "slash:default",
     ]);
   });
 

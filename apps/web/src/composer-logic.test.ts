@@ -269,7 +269,7 @@ describe("collapseExpandedComposerCursor", () => {
 
   it("maps expanded slash-command cursor back to collapsed cursor", () => {
     const text = "run /ui then";
-    const collapsedCursorAfterCommand = "run /ui ".length;
+    const collapsedCursorAfterCommand = "run ".length + 2;
     const expandedCursorAfterCommand = "run /ui ".length;
 
     expect(collapseExpandedComposerCursor(text, expandedCursorAfterCommand, slashCommands)).toBe(

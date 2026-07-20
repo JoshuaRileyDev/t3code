@@ -64,20 +64,15 @@ describe("buildComposerSlashCommandItems", () => {
       "slash:plan",
       "slash:default",
       "provider-slash-command:claude-agent:ui",
-      "provider-slash-command:codex:plan",
       "provider-slash-command:codex:apply",
     ]);
     expect(items.filter((item) => item.type === "provider-slash-command")).toEqual([
       expect.objectContaining({
-        label: "ui",
+        label: "Ui",
         description: "Explore and refine UI",
       }),
       expect.objectContaining({
-        label: "plan",
-        description: "Create an implementation plan",
-      }),
-      expect.objectContaining({
-        label: "apply",
+        label: "Apply",
         description: "Apply the current change",
       }),
     ]);

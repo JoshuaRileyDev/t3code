@@ -121,6 +121,7 @@ interface ChatMarkdownProps {
 }
 
 const EMPTY_MARKDOWN_SKILLS: ReadonlyArray<Pick<ServerProviderSkill, "name" | "displayName">> = [];
+const EMPTY_MARKDOWN_SLASH_COMMANDS: ReadonlyArray<ComposerSlashCommandLike> = [];
 
 const CODE_FENCE_LANGUAGE_REGEX = /(?:^|\s)language-([^\s]+)/;
 const MAX_HIGHLIGHT_CACHE_ENTRIES = 500;
@@ -1257,7 +1258,7 @@ function ChatMarkdown({
   onTaskListChange,
   isStreaming = false,
   skills = EMPTY_MARKDOWN_SKILLS,
-  slashCommands = [],
+  slashCommands = EMPTY_MARKDOWN_SLASH_COMMANDS,
   className,
   lineBreaks = false,
 }: ChatMarkdownProps) {
