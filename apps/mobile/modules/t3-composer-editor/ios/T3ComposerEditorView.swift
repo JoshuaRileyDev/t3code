@@ -67,6 +67,16 @@ private final class ComposerTextView: UITextView {
 
   override var keyCommands: [UIKeyCommand]? {
     var commands = super.keyCommands ?? []
+    let pasteModifiers: [UIKeyModifierFlags] = [.command, .control]
+    for modifierFlags in pasteModifiers {
+      let paste = UIKeyCommand(
+        input: "v",
+        modifierFlags: modifierFlags,
+        action: #selector(paste(_:))
+      )
+      paste.discoverabilityTitle = "Paste"
+      commands.append(paste)
+    }
     let submit = UIKeyCommand(
       input: "\r",
       modifierFlags: .command,
