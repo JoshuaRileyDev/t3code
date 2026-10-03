@@ -45,6 +45,14 @@ export function validateScheduledTasksSearch(raw: Record<string, unknown>) {
 
 type ScheduleMode = "fixed" | "interval";
 export type WorkspaceMode = "root" | "worktree" | "existing_worktree";
+export type ScheduledTaskIntervalUnit = "minutes" | "hours" | "days" | "months";
+
+export const SCHEDULED_TASK_INTERVAL_UNIT_MS: Record<ScheduledTaskIntervalUnit, number> = {
+  minutes: 60_000,
+  hours: 60 * 60_000,
+  days: 24 * 60 * 60_000,
+  months: 30 * 24 * 60 * 60_000,
+};
 
 export interface DraftState {
   readonly editingId: string | null;
@@ -53,7 +61,7 @@ export interface DraftState {
   readonly enabled: boolean;
   readonly scheduleMode: ScheduleMode;
   readonly intervalValue: string;
-  readonly intervalUnit: "minutes" | "hours" | "days" | "months";
+  readonly intervalUnit: ScheduledTaskIntervalUnit;
   readonly timeOfDay: string;
   readonly weekdays: ReadonlySet<number>;
   readonly projectId: string;
@@ -76,18 +84,14 @@ export interface DraftState {
 
 export function taskToDraft(task: ScheduledTask): DraftState {
   const schedule = task.schedule;
-  const intervalUnits = [
-    ["months", 30 * 24 * 60 * 60_000],
-    ["days", 24 * 60 * 60_000],
-    ["hours", 60 * 60_000],
-    ["minutes", 60_000],
-  ] as const;
+  const intervalUnits = ["months", "days", "hours", "minutes"] as const;
   const intervalUnit =
     schedule.type === "interval"
-      ? (intervalUnits.find(([, milliseconds]) => schedule.everyMs % milliseconds === 0)?.[0] ??
-        "minutes")
+      ? (intervalUnits.find(
+          (unit) => schedule.everyMs % SCHEDULED_TASK_INTERVAL_UNIT_MS[unit] === 0,
+        ) ?? "minutes")
       : "minutes";
-  const intervalMilliseconds = intervalUnits.find(([unit]) => unit === intervalUnit)?.[1] ?? 60_000;
+  const intervalMilliseconds = SCHEDULED_TASK_INTERVAL_UNIT_MS[intervalUnit];
   const weekdays =
     schedule.type === "fixed_time" && schedule.weekdays && schedule.weekdays.length > 0
       ? new Set(schedule.weekdays)

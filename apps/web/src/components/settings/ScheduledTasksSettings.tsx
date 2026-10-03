@@ -47,6 +47,7 @@ import { EnvironmentMachineIcon } from "../EnvironmentMachineIcon";
 import { useSettingsScope } from "./SettingsScopeContext";
 import {
   matchesScheduledTaskScope,
+  SCHEDULED_TASK_INTERVAL_UNIT_MS,
   scheduledTaskDefaultModel,
   taskToDraft,
   type DraftState,
@@ -151,9 +152,7 @@ function splitModelKey(value: string): ModelSelection | null {
 
 function scheduleFromDraft(draft: DraftState): ScheduledTaskSchedule {
   if (draft.scheduleMode === "interval") {
-    const unitMs = { minutes: 60_000, hours: 3_600_000, days: 86_400_000, months: 2_592_000_000 }[
-      draft.intervalUnit
-    ];
+    const unitMs = SCHEDULED_TASK_INTERVAL_UNIT_MS[draft.intervalUnit];
     const everyMs = Math.round(Number(draft.intervalValue) * unitMs);
     return { type: "interval", everyMs };
   }
@@ -167,10 +166,14 @@ function scheduleFromDraft(draft: DraftState): ScheduledTaskSchedule {
 
 export function scheduleLabel(schedule: ScheduledTaskSchedule): string {
   if (schedule.type === "interval") {
-    const minutes = schedule.everyMs / 60_000;
-    return Number.isInteger(minutes)
-      ? `Every ${minutes} min`
-      : `Every ${Math.round(schedule.everyMs / 1000)} sec`;
+    const intervalUnit = (["months", "days", "hours", "minutes"] as const).find(
+      (unit) => schedule.everyMs % SCHEDULED_TASK_INTERVAL_UNIT_MS[unit] === 0,
+    );
+    if (!intervalUnit) return `Every ${Math.round(schedule.everyMs / 1000)} sec`;
+    const interval = schedule.everyMs / SCHEDULED_TASK_INTERVAL_UNIT_MS[intervalUnit];
+    if (intervalUnit === "minutes") return `Every ${interval} min`;
+    const label = intervalUnit === "hours" ? "hour" : intervalUnit === "days" ? "day" : "month";
+    return `Every ${interval} ${label}${interval === 1 ? "" : "s"}`;
   }
   const weekdays = schedule.weekdays ?? [];
   const days =
