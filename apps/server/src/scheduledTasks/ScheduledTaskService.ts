@@ -50,6 +50,7 @@ interface ScheduledTaskRow {
   readonly title: string;
   readonly prompt: string;
   readonly enabled: number;
+  readonly settle_on_completion: number;
   readonly schedule_json: string;
   readonly project_id: string;
   readonly thread_id: string | null;
@@ -137,6 +138,7 @@ const decodeRow = (row: ScheduledTaskRow) =>
       title: row.title,
       prompt: row.prompt,
       enabled: row.enabled === 1,
+      settleOnCompletion: row.settle_on_completion === 1,
       schedule,
       projectId: row.project_id,
       threadId: row.thread_id,
@@ -223,6 +225,7 @@ export const layer = Layer.effect(
         title,
         prompt,
         enabled,
+        settle_on_completion,
         schedule_json,
         project_id,
         thread_id,
@@ -255,6 +258,7 @@ export const layer = Layer.effect(
         title,
         prompt,
         enabled,
+        settle_on_completion,
         schedule_json,
         project_id,
         thread_id,
@@ -307,6 +311,7 @@ export const layer = Layer.effect(
           title,
           prompt,
           enabled,
+          settle_on_completion,
           schedule_json,
           project_id,
           thread_id,
@@ -329,6 +334,7 @@ export const layer = Layer.effect(
           ${task.title},
           ${task.prompt},
           ${task.enabled ? 1 : 0},
+          ${task.settleOnCompletion ? 1 : 0},
           ${JSON.stringify(task.schedule)},
           ${task.projectId},
           ${task.threadId},
@@ -352,6 +358,7 @@ export const layer = Layer.effect(
           title = excluded.title,
           prompt = excluded.prompt,
           enabled = excluded.enabled,
+          settle_on_completion = excluded.settle_on_completion,
           schedule_json = excluded.schedule_json,
           project_id = excluded.project_id,
           thread_id = excluded.thread_id,
@@ -528,6 +535,7 @@ export const layer = Layer.effect(
                   initialMessage: {
                     messageId,
                     scheduledTaskId: active.id,
+                    settleOnCompletion: active.settleOnCompletion,
                     text: prompt,
                     attachments: [],
                   },
@@ -542,6 +550,7 @@ export const layer = Layer.effect(
                   threadId: ThreadId.make(active.threadId),
                   messageId,
                   scheduledTaskId: active.id,
+                  settleOnCompletion: active.settleOnCompletion,
                   text: prompt,
                   attachments: [],
                   modelSelection: active.modelSelection,
@@ -550,6 +559,40 @@ export const layer = Layer.effect(
                   creationSource: active.creationSource,
                 }),
               );
+
+        if (active.settleOnCompletion && result._tag === "Success") {
+          const dispatched = result.value;
+          const threadId = active.threadId ?? dispatched.projection.thread.id;
+          const runId = dispatched.projection.runs
+            .toSorted((left, right) => right.ordinal - left.ordinal)[0]?.id;
+          if (runId !== undefined) {
+            yield* Effect.gen(function* () {
+              const terminal = yield* threadManagement.waitForThread({
+                projectId: active.projectId,
+                threadId,
+                runId,
+                timeoutMs: 7 * 24 * 60 * 60 * 1000,
+              });
+              if (terminal.timedOut || terminal.run === null) return;
+              yield* threadManagement.dispatch({
+                type: "thread.settle",
+                commandId: CommandId.make(`${commandId}:settle:${runId}`),
+                threadId,
+              });
+            }).pipe(
+              Effect.catchCause((cause) =>
+                Effect.logWarning("Could not settle scheduled task thread after completion", {
+                  taskId: active.id,
+                  threadId,
+                  runId,
+                  cause,
+                }),
+              ),
+              Effect.forkDetach({ startImmediately: true }),
+              Effect.asVoid,
+            );
+          }
+        }
 
         const completedAt = yield* localNow;
         const runSucceeded = result._tag === "Success";
@@ -750,6 +793,7 @@ export const layer = Layer.effect(
           title: input.title,
           prompt: input.prompt,
           enabled: input.enabled,
+          settleOnCompletion: input.settleOnCompletion ?? existingTask?.settleOnCompletion ?? false,
           schedule: input.schedule,
           projectId: input.projectId,
           threadId: input.threadId ?? null,
