@@ -48,6 +48,7 @@ import { useSettingsScope } from "./SettingsScopeContext";
 import {
   matchesScheduledTaskScope,
   SCHEDULED_TASK_INTERVAL_UNIT_MS,
+  intervalScheduleFromDraft,
   scheduledTaskDefaultModel,
   taskToDraft,
   type DraftState,
@@ -152,9 +153,7 @@ function splitModelKey(value: string): ModelSelection | null {
 
 function scheduleFromDraft(draft: DraftState): ScheduledTaskSchedule {
   if (draft.scheduleMode === "interval") {
-    const unitMs = SCHEDULED_TASK_INTERVAL_UNIT_MS[draft.intervalUnit];
-    const everyMs = Math.round(Number(draft.intervalValue) * unitMs);
-    return { type: "interval", everyMs };
+    return intervalScheduleFromDraft(draft.intervalValue, draft.intervalUnit);
   }
   const selectedEveryDay = draft.weekdays.size === 0 || draft.weekdays.size === 7;
   return {

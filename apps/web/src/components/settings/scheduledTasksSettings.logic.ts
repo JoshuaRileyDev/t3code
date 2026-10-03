@@ -54,6 +54,16 @@ export const SCHEDULED_TASK_INTERVAL_UNIT_MS: Record<ScheduledTaskIntervalUnit, 
   months: 30 * 24 * 60 * 60_000,
 };
 
+export function intervalScheduleFromDraft(
+  intervalValue: string,
+  intervalUnit: ScheduledTaskIntervalUnit,
+) {
+  return {
+    type: "interval" as const,
+    everyMs: Math.round(Number(intervalValue) * SCHEDULED_TASK_INTERVAL_UNIT_MS[intervalUnit]),
+  };
+}
+
 export interface DraftState {
   readonly editingId: string | null;
   readonly title: string;
