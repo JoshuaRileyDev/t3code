@@ -52,7 +52,8 @@ export interface DraftState {
   readonly prompt: string;
   readonly enabled: boolean;
   readonly scheduleMode: ScheduleMode;
-  readonly intervalMinutes: string;
+  readonly intervalValue: string;
+  readonly intervalUnit: "minutes" | "hours" | "days" | "months";
   readonly timeOfDay: string;
   readonly weekdays: ReadonlySet<number>;
   readonly projectId: string;
@@ -75,6 +76,18 @@ export interface DraftState {
 
 export function taskToDraft(task: ScheduledTask): DraftState {
   const schedule = task.schedule;
+  const intervalUnits = [
+    ["months", 30 * 24 * 60 * 60_000],
+    ["days", 24 * 60 * 60_000],
+    ["hours", 60 * 60_000],
+    ["minutes", 60_000],
+  ] as const;
+  const intervalUnit =
+    schedule.type === "interval"
+      ? (intervalUnits.find(([, milliseconds]) => schedule.everyMs % milliseconds === 0)?.[0] ??
+        "minutes")
+      : "minutes";
+  const intervalMilliseconds = intervalUnits.find(([unit]) => unit === intervalUnit)?.[1] ?? 60_000;
   const weekdays =
     schedule.type === "fixed_time" && schedule.weekdays && schedule.weekdays.length > 0
       ? new Set(schedule.weekdays)
@@ -85,8 +98,11 @@ export function taskToDraft(task: ScheduledTask): DraftState {
     prompt: task.prompt,
     enabled: task.enabled,
     scheduleMode: schedule.type === "interval" ? "interval" : "fixed",
-    intervalMinutes:
-      schedule.type === "interval" ? String(Math.max(1, schedule.everyMs / 60_000)) : "15",
+    intervalValue:
+      schedule.type === "interval"
+        ? String(Math.max(1, schedule.everyMs / intervalMilliseconds))
+        : "15",
+    intervalUnit,
     timeOfDay: schedule.type === "fixed_time" ? schedule.timeOfDay : "09:00",
     weekdays,
     projectId: task.projectId,

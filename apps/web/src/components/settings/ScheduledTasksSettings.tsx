@@ -99,7 +99,8 @@ const EMPTY_DRAFT: DraftState = {
   prompt: "",
   enabled: true,
   scheduleMode: "fixed",
-  intervalMinutes: "15",
+  intervalValue: "15",
+  intervalUnit: "minutes",
   timeOfDay: "09:00",
   weekdays: new Set([1, 2, 3, 4, 5]),
   projectId: "",
@@ -150,7 +151,10 @@ function splitModelKey(value: string): ModelSelection | null {
 
 function scheduleFromDraft(draft: DraftState): ScheduledTaskSchedule {
   if (draft.scheduleMode === "interval") {
-    const everyMs = Math.round(Number(draft.intervalMinutes) * 60_000);
+    const unitMs = { minutes: 60_000, hours: 3_600_000, days: 86_400_000, months: 2_592_000_000 }[
+      draft.intervalUnit
+    ];
+    const everyMs = Math.round(Number(draft.intervalValue) * unitMs);
     return { type: "interval", everyMs };
   }
   const selectedEveryDay = draft.weekdays.size === 0 || draft.weekdays.size === 7;
@@ -882,12 +886,33 @@ function ScheduledTaskEditorDialog({
                     min={1}
                     step="any"
                     className="w-24"
-                    value={draft.intervalMinutes}
+                    value={draft.intervalValue}
                     onChange={(event) =>
-                      setDraft((current) => ({ ...current, intervalMinutes: event.target.value }))
+                      setDraft((current) => ({ ...current, intervalValue: event.target.value }))
                     }
                   />
-                  <span className="text-xs text-muted-foreground">minutes</span>
+                  <Select
+                    value={draft.intervalUnit}
+                    onValueChange={(value) => {
+                      if (
+                        value === "minutes" ||
+                        value === "hours" ||
+                        value === "days" ||
+                        value === "months"
+                      )
+                        setDraft((current) => ({ ...current, intervalUnit: value }));
+                    }}
+                  >
+                    <SelectTrigger aria-label="Interval unit" className="w-32">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectPopup>
+                      <SelectItem value="minutes">Minutes</SelectItem>
+                      <SelectItem value="hours">Hours</SelectItem>
+                      <SelectItem value="days">Days</SelectItem>
+                      <SelectItem value="months">Months</SelectItem>
+                    </SelectPopup>
+                  </Select>
                 </div>
               )}
             </div>
