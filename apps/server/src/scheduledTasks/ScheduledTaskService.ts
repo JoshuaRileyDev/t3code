@@ -560,40 +560,6 @@ export const layer = Layer.effect(
                 }),
               );
 
-        if (active.settleOnCompletion && result._tag === "Success") {
-          const dispatched = result.value;
-          const threadId = active.threadId ?? dispatched.projection.thread.id;
-          const runId = dispatched.projection.runs
-            .toSorted((left, right) => right.ordinal - left.ordinal)[0]?.id;
-          if (runId !== undefined) {
-            yield* Effect.gen(function* () {
-              const terminal = yield* threadManagement.waitForThread({
-                projectId: active.projectId,
-                threadId,
-                runId,
-                timeoutMs: 7 * 24 * 60 * 60 * 1000,
-              });
-              if (terminal.timedOut || terminal.run === null) return;
-              yield* threadManagement.dispatch({
-                type: "thread.settle",
-                commandId: CommandId.make(`${commandId}:settle:${runId}`),
-                threadId,
-              });
-            }).pipe(
-              Effect.catchCause((cause) =>
-                Effect.logWarning("Could not settle scheduled task thread after completion", {
-                  taskId: active.id,
-                  threadId,
-                  runId,
-                  cause,
-                }),
-              ),
-              Effect.forkDetach({ startImmediately: true }),
-              Effect.asVoid,
-            );
-          }
-        }
-
         const completedAt = yield* localNow;
         const runSucceeded = result._tag === "Success";
         const lastRunStatus = runSucceeded ? ("succeeded" as const) : ("failed" as const);
