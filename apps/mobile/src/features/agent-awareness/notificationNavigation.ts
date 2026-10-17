@@ -1,20 +1,38 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useLayoutEffect, useRef } from "react";
 import * as Notifications from "expo-notifications";
-import { useRouter } from "expo-router";
+import { useLinkTo } from "@react-navigation/native";
 
-import { routeAgentNotificationResponseOnce } from "./notificationPayload";
+import { setAndroidThreadOnScreen } from "./androidNotifications";
+import { foregroundNotificationBehavior } from "./foregroundNotificationBehavior";
+import { routeAgentNotificationResponseOnce, threadDeepLinkOnScreen } from "./notificationPayload";
 import { consumeLastAgentNotificationResponse } from "./notificationResponseConsumer";
 
-export function useAgentNotificationNavigation(): void {
-  const router = useRouter();
+export function useAgentNotificationNavigation(pathname: string): void {
+  const linkTo = useLinkTo();
   const handledResponseIds = useRef(new Set<string>());
+  const deepLinkOnScreen = useRef<string | null>(null);
+  useLayoutEffect(() => {
+    const thread = threadDeepLinkOnScreen(pathname);
+    deepLinkOnScreen.current = thread;
+    setAndroidThreadOnScreen(thread);
+  }, [pathname]);
+
+  useEffect(() => {
+    Notifications.setNotificationHandler({
+      handleNotification: (notification) =>
+        Promise.resolve(foregroundNotificationBehavior(notification, deepLinkOnScreen.current)),
+    });
+    return () => {
+      Notifications.setNotificationHandler(null);
+    };
+  }, []);
 
   useEffect(() => {
     const handleResponse = (response: Notifications.NotificationResponse): void => {
       routeAgentNotificationResponseOnce({
         handledResponseIds: handledResponseIds.current,
         response,
-        navigate: (deepLink) => router.push(deepLink as never),
+        navigate: linkTo,
       });
     };
 
@@ -28,5 +46,5 @@ export function useAgentNotificationNavigation(): void {
     return () => {
       subscription.remove();
     };
-  }, [router]);
+  }, [linkTo]);
 }

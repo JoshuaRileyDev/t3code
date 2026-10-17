@@ -32,7 +32,11 @@ export function projectThreadContentPresentation(input: {
       detail: input.detailError,
     };
   }
-  if (input.connectionState === "connected") {
+  if (
+    input.connectionState === "connected" ||
+    input.connectionState === "connecting" ||
+    input.connectionState === "reconnecting"
+  ) {
     return { kind: "loading" };
   }
   return {

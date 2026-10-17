@@ -1,245 +1,228 @@
-import type {
-  EnvironmentId,
-  SidebarProjectGroupingMode,
-  SidebarThreadSortOrder,
-} from "@t3tools/contracts";
-import {
-  DEFAULT_SIDEBAR_PROJECT_GROUPING_MODE,
-  DEFAULT_SIDEBAR_PROJECT_SORT_ORDER,
-  DEFAULT_SIDEBAR_THREAD_SORT_ORDER,
-} from "@t3tools/contracts";
-import { Stack } from "expo-router";
-import { Text as RNText, View } from "react-native";
+import { Toolbar } from "../../components/ui/Toolbar";
+import { NativeStackScreenOptions } from "../../native/StackHeader";
+import { use, useCallback, useEffect, useRef } from "react";
+import { useNavigation, type ParamListBase } from "@react-navigation/native";
+import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
+import { Platform } from "react-native";
+import type { SearchBarCommands } from "react-native-screens";
+import { NativePrimaryColumnContext } from "../../native/v5-workspace-context";
+import { useUniwindTheme } from "../../lib/useUniwindTheme";
+import { useHardwareKeyboardCommand } from "../keyboard/hardwareKeyboardCommands";
+import { withNativeGlassHeaderItem } from "../layout/native-glass-header-items";
+import { createNativeMailSearchToolbarItem } from "../layout/native-mail-search-toolbar";
+import { useNativeMailSearchToolbar } from "../../native/use-native-mail-search-toolbar";
+import { useDeviceType } from "../../native/native-layout-metrics";
+import { buildHomeListFilterMenu } from "./home-list-filter-menu";
+import { createSidebarHeaderItems } from "../threads/sidebar-native-header-items";
+import type { HomeHeaderProps } from "./HomeHeader.types";
+import { useAdaptiveWorkspaceLayout } from "../layout/AdaptiveWorkspaceLayout";
 
-import { useThemeColor } from "../../lib/useThemeColor";
-import { MOBILE_TYPOGRAPHY } from "../../lib/typography";
-import type { HomeProjectSortOrder } from "./homeThreadList";
+export type { HomeHeaderEnvironment } from "./HomeHeader.types";
 
-export interface HomeHeaderEnvironment {
-  readonly environmentId: EnvironmentId;
-  readonly label: string;
-}
-
-const PROJECT_SORT_OPTIONS: ReadonlyArray<{
-  readonly value: HomeProjectSortOrder;
-  readonly label: string;
-}> = [
-  { value: "updated_at", label: "Last user message" },
-  { value: "created_at", label: "Created at" },
-];
-
-const THREAD_SORT_OPTIONS: ReadonlyArray<{
-  readonly value: SidebarThreadSortOrder;
-  readonly label: string;
-}> = [
-  { value: "updated_at", label: "Last user message" },
-  { value: "created_at", label: "Created at" },
-];
-
-const PROJECT_GROUPING_OPTIONS: ReadonlyArray<{
-  readonly value: SidebarProjectGroupingMode;
-  readonly label: string;
-  readonly subtitle: string;
-}> = [
-  {
-    value: "repository",
-    label: "Group by repository",
-    subtitle: "Combine matching repositories across environments",
-  },
-  {
-    value: "repository_path",
-    label: "Group by repository path",
-    subtitle: "Combine only matching paths within a repository",
-  },
-  {
-    value: "separate",
-    label: "Keep separate",
-    subtitle: "Show every project path separately",
-  },
-];
-
-export function HomeHeader(props: {
-  readonly environments: ReadonlyArray<HomeHeaderEnvironment>;
-  readonly selectedEnvironmentId: EnvironmentId | null;
-  readonly projectSortOrder: HomeProjectSortOrder;
-  readonly threadSortOrder: SidebarThreadSortOrder;
-  readonly projectGroupingMode: SidebarProjectGroupingMode;
-  readonly onSearchQueryChange: (query: string) => void;
-  readonly onEnvironmentChange: (environmentId: EnvironmentId | null) => void;
-  readonly onProjectSortOrderChange: (sortOrder: HomeProjectSortOrder) => void;
-  readonly onThreadSortOrderChange: (sortOrder: SidebarThreadSortOrder) => void;
-  readonly onProjectGroupingModeChange: (mode: SidebarProjectGroupingMode) => void;
-  readonly onOpenSettings: () => void;
-  readonly onStartNewTask: () => void;
-}) {
-  const iconColor = useThemeColor("--color-icon");
-  const mutedColor = useThemeColor("--color-foreground-muted");
-  const subtleColor = useThemeColor("--color-subtle");
+export function HomeHeader(props: HomeHeaderProps) {
+  const navigation = useNavigation<NativeStackNavigationProp<ParamListBase>>();
+  const { layout, panes, togglePrimarySidebar } = useAdaptiveWorkspaceLayout();
+  const usesNativeMailSearchToolbar = useNativeMailSearchToolbar();
+  const deviceType = useDeviceType();
+  const primaryColumn = use(NativePrimaryColumnContext);
+  const sidebarHeader =
+    Platform.OS === "ios" &&
+    primaryColumn !== null &&
+    (deviceType === "pad" || !usesNativeMailSearchToolbar);
+  const showsCompactCompose = deviceType === "pad" && !layout.usesSplitView;
+  const searchBarRef = useRef<SearchBarCommands>(null);
+  const focusAfterReveal = useRef(false);
+  useEffect(
+    () =>
+      navigation.addListener("transitionEnd", (event) => {
+        if (focusAfterReveal.current && !event.data.closing) {
+          focusAfterReveal.current = false;
+          searchBarRef.current?.focus();
+        }
+      }),
+    [navigation],
+  );
+  const iconColor = useUniwindTheme()["--color-icon"];
   const hasCustomListOptions =
-    props.selectedEnvironmentId !== null ||
-    props.projectSortOrder !== DEFAULT_SIDEBAR_PROJECT_SORT_ORDER ||
-    props.threadSortOrder !== DEFAULT_SIDEBAR_THREAD_SORT_ORDER ||
-    props.projectGroupingMode !== DEFAULT_SIDEBAR_PROJECT_GROUPING_MODE;
+    props.selectedEnvironmentId !== null || props.selectedProjectKey !== null;
+  const focusSearch = useCallback(() => {
+    if (primaryColumn && !panes.primarySidebarVisible) {
+      focusAfterReveal.current = true;
+      togglePrimarySidebar();
+      return true;
+    }
+    searchBarRef.current?.focus();
+    return searchBarRef.current !== null;
+  }, [primaryColumn, panes.primarySidebarVisible, togglePrimarySidebar]);
+  useHardwareKeyboardCommand("focusSearch", focusSearch);
+  const filterMenu = buildHomeListFilterMenu(props);
+
+  if (props.usesWorkspaceToolbar) {
+    return null;
+  }
 
   return (
     <>
-      <Stack.Screen
+      <NativeStackScreenOptions
+        optionsVersion={[filterMenu.items, showsCompactCompose]}
         options={{
-          headerShown: true,
-          headerTransparent: true,
-          headerStyle: { backgroundColor: "transparent" },
-          headerShadowVisible: false,
           headerTintColor: iconColor,
-          headerTitle: "",
-          headerSearchBarOptions: {
-            placeholder: "Search threads",
-            hideNavigationBar: false,
-            onChangeText: (event) => {
-              props.onSearchQueryChange(event.nativeEvent.text);
-            },
-            onCancelButtonPress: () => {
-              props.onSearchQueryChange("");
-            },
-            allowToolbarIntegration: true,
-          },
+          unstable_headerRightItems: () =>
+            sidebarHeader
+              ? [
+                  ...createSidebarHeaderItems({
+                    filterIcon: hasCustomListOptions
+                      ? "line.3.horizontal.decrease.circle.fill"
+                      : "line.3.horizontal.decrease.circle",
+                    filterMenu,
+                    onOpenSettings: props.onOpenSettings,
+                  }),
+                  ...(showsCompactCompose
+                    ? [
+                        withNativeGlassHeaderItem({
+                          accessibilityLabel: "New task",
+                          axisBehavior: "horizontalOnly",
+                          icon: { name: "square.and.pencil", type: "sfSymbol" } as const,
+                          identifier: "home-new-task",
+                          label: "",
+                          onPress: props.onStartNewTask,
+                          type: "button",
+                        }),
+                      ]
+                    : []),
+                ]
+              : [
+                  withNativeGlassHeaderItem({
+                    accessibilityLabel: "Open settings",
+                    icon: { name: "ellipsis", type: "sfSymbol" } as const,
+                    identifier: "home-settings",
+                    label: "",
+                    onPress: props.onOpenSettings,
+                    type: "button",
+                  }),
+                ],
+          // The keys below are set per-branch (not `undefined`) so a later
+          // reapply cannot clobber options owned by Toolbar.
+          ...(sidebarHeader
+            ? {
+                headerSearchBarOptions: {
+                  ref: searchBarRef,
+                  autoCapitalize: "none" as const,
+                  hideNavigationBar: false,
+                  hideWhenScrolling: false,
+                  obscureBackground: false,
+                  placement: "stacked" as const,
+                  allowToolbarIntegration: false,
+                  placeholder: "Search",
+                  onCancelButtonPress: () => props.onSearchQueryChange(""),
+                  onChangeText: (event) => props.onSearchQueryChange(event.nativeEvent.text),
+                },
+                unstable_headerToolbarItems: () => [],
+              }
+            : usesNativeMailSearchToolbar
+              ? {
+                  headerSearchBarOptions: {
+                    ref: searchBarRef,
+                    autoCapitalize: "none" as const,
+                    onCancelButtonPress: () => props.onSearchQueryChange(""),
+                  },
+                  unstable_headerToolbarItems: () => [
+                    createNativeMailSearchToolbarItem({
+                      composeButtonId: "home-new-task",
+                      composeSystemImageName: "square.and.pencil",
+                      filterMenu,
+                      filterButtonId: "home-filter",
+                      filterSystemImageName: hasCustomListOptions
+                        ? "line.3.horizontal.decrease.circle.fill"
+                        : "line.3.horizontal.decrease",
+                      onComposePress: props.onStartNewTask,
+                      onSearchTextChange: props.onSearchQueryChange,
+                      placeholder: "Search",
+                      searchTextChangeId: "home-search-text",
+                      showsSearchDismissButton: true,
+                    }),
+                  ],
+                }
+              : {
+                  headerSearchBarOptions: {
+                    ref: searchBarRef,
+                    autoCapitalize: "none" as const,
+                    hideNavigationBar: false,
+                    placeholder: "Search",
+                    onCancelButtonPress: () => {
+                      props.onSearchQueryChange("");
+                    },
+                    onChangeText: (event) => {
+                      props.onSearchQueryChange(event.nativeEvent.text);
+                    },
+                  },
+                }),
         }}
       />
 
-      <Stack.Toolbar placement="left">
-        <Stack.Toolbar.View hidesSharedBackground>
-          <View
-            style={{
-              width: 128,
-              height: 32,
-              flexDirection: "row",
-              alignItems: "center",
-              gap: 8,
-            }}
+      {sidebarHeader || usesNativeMailSearchToolbar ? null : (
+        <Toolbar placement="bottom">
+          <Toolbar.Menu
+            accessibilityLabel="Filter threads"
+            icon={
+              hasCustomListOptions
+                ? "line.3.horizontal.decrease.circle.fill"
+                : "line.3.horizontal.decrease.circle"
+            }
+            title="Thread list options"
+            separateBackground
           >
-            <RNText
-              style={{
-                fontFamily: "DMSans_700Bold",
-                fontSize: MOBILE_TYPOGRAPHY.headline.fontSize,
-                color: iconColor,
-                letterSpacing: -0.4,
-              }}
-            >
-              T3 Code
-            </RNText>
-            <View
-              style={{
-                backgroundColor: subtleColor,
-                borderRadius: 99,
-                paddingHorizontal: 8,
-                paddingVertical: 3,
-              }}
-            >
-              <RNText
-                style={{
-                  fontFamily: "DMSans_700Bold",
-                  fontSize: MOBILE_TYPOGRAPHY.micro.fontSize,
-                  color: mutedColor,
-                  letterSpacing: 1.1,
-                  textTransform: "uppercase",
-                }}
+            <Toolbar.Menu title="Environment">
+              <Toolbar.Label>Environment</Toolbar.Label>
+              <Toolbar.MenuAction
+                isOn={props.selectedEnvironmentId === null}
+                onPress={() => props.onEnvironmentChange(null)}
+                subtitle="Show threads from every environment"
               >
-                Alpha
-              </RNText>
-            </View>
-          </View>
-        </Stack.Toolbar.View>
-      </Stack.Toolbar>
+                <Toolbar.Label>All environments</Toolbar.Label>
+              </Toolbar.MenuAction>
+              {props.environments.map((environment) => (
+                <Toolbar.MenuAction
+                  key={environment.environmentId}
+                  isOn={props.selectedEnvironmentId === environment.environmentId}
+                  onPress={() => props.onEnvironmentChange(environment.environmentId)}
+                >
+                  <Toolbar.Label>{environment.label}</Toolbar.Label>
+                </Toolbar.MenuAction>
+              ))}
+            </Toolbar.Menu>
 
-      <Stack.Toolbar placement="right">
-        <Stack.Toolbar.Menu
-          accessibilityLabel="Filter and sort threads"
-          icon={
-            hasCustomListOptions
-              ? "line.3.horizontal.decrease.circle.fill"
-              : "line.3.horizontal.decrease.circle"
-          }
-          separateBackground
-          title="Thread list options"
-        >
-          <Stack.Toolbar.Menu title="Environment">
-            <Stack.Toolbar.Label>Environment</Stack.Toolbar.Label>
-            <Stack.Toolbar.MenuAction
-              isOn={props.selectedEnvironmentId === null}
-              onPress={() => props.onEnvironmentChange(null)}
-              subtitle="Show threads from every environment"
-            >
-              <Stack.Toolbar.Label>All environments</Stack.Toolbar.Label>
-            </Stack.Toolbar.MenuAction>
-            {props.environments.map((environment) => (
-              <Stack.Toolbar.MenuAction
-                key={environment.environmentId}
-                isOn={props.selectedEnvironmentId === environment.environmentId}
-                onPress={() => props.onEnvironmentChange(environment.environmentId)}
-              >
-                <Stack.Toolbar.Label>{environment.label}</Stack.Toolbar.Label>
-              </Stack.Toolbar.MenuAction>
-            ))}
-          </Stack.Toolbar.Menu>
-
-          <Stack.Toolbar.Menu title="Sort projects">
-            <Stack.Toolbar.Label>Sort projects</Stack.Toolbar.Label>
-            {PROJECT_SORT_OPTIONS.map((option) => (
-              <Stack.Toolbar.MenuAction
-                key={option.value}
-                isOn={props.projectSortOrder === option.value}
-                onPress={() => props.onProjectSortOrderChange(option.value)}
-              >
-                <Stack.Toolbar.Label>{option.label}</Stack.Toolbar.Label>
-              </Stack.Toolbar.MenuAction>
-            ))}
-          </Stack.Toolbar.Menu>
-
-          <Stack.Toolbar.Menu title="Sort threads">
-            <Stack.Toolbar.Label>Sort threads</Stack.Toolbar.Label>
-            {THREAD_SORT_OPTIONS.map((option) => (
-              <Stack.Toolbar.MenuAction
-                key={option.value}
-                isOn={props.threadSortOrder === option.value}
-                onPress={() => props.onThreadSortOrderChange(option.value)}
-              >
-                <Stack.Toolbar.Label>{option.label}</Stack.Toolbar.Label>
-              </Stack.Toolbar.MenuAction>
-            ))}
-          </Stack.Toolbar.Menu>
-
-          <Stack.Toolbar.Menu title="Group projects">
-            <Stack.Toolbar.Label>Group projects</Stack.Toolbar.Label>
-            {PROJECT_GROUPING_OPTIONS.map((option) => (
-              <Stack.Toolbar.MenuAction
-                key={option.value}
-                isOn={props.projectGroupingMode === option.value}
-                onPress={() => props.onProjectGroupingModeChange(option.value)}
-                subtitle={option.subtitle}
-              >
-                <Stack.Toolbar.Label>{option.label}</Stack.Toolbar.Label>
-              </Stack.Toolbar.MenuAction>
-            ))}
-          </Stack.Toolbar.Menu>
-        </Stack.Toolbar.Menu>
-
-        <Stack.Toolbar.Button
-          accessibilityLabel="Open settings"
-          icon="gearshape"
-          onPress={props.onOpenSettings}
-          separateBackground
-        />
-      </Stack.Toolbar>
-
-      <Stack.Toolbar placement="bottom">
-        <Stack.Toolbar.SearchBarSlot />
-        <Stack.Toolbar.Spacer width={8} sharesBackground={false} />
-        <Stack.Toolbar.Button
-          accessibilityLabel="New task"
-          icon="square.and.pencil"
-          onPress={props.onStartNewTask}
-          separateBackground
-        />
-      </Stack.Toolbar>
+            {props.projects.length > 0 ? (
+              <Toolbar.Menu title="Project">
+                <Toolbar.Label>Project</Toolbar.Label>
+                <Toolbar.MenuAction
+                  isOn={props.selectedProjectKey === null}
+                  onPress={() => props.onProjectChange(null)}
+                  subtitle="Show threads from every project"
+                >
+                  <Toolbar.Label>All projects</Toolbar.Label>
+                </Toolbar.MenuAction>
+                {props.projects.map((project) => (
+                  <Toolbar.MenuAction
+                    key={project.key}
+                    isOn={props.selectedProjectKey === project.key}
+                    onPress={() => props.onProjectChange(project.key)}
+                  >
+                    <Toolbar.Label>{project.label}</Toolbar.Label>
+                  </Toolbar.MenuAction>
+                ))}
+              </Toolbar.Menu>
+            ) : null}
+          </Toolbar.Menu>
+          <Toolbar.Spacer flexible />
+          <Toolbar.Button
+            accessibilityLabel="New task"
+            icon="square.and.pencil"
+            onPress={props.onStartNewTask}
+            separateBackground
+          />
+        </Toolbar>
+      )}
     </>
   );
 }

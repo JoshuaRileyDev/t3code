@@ -155,6 +155,24 @@ describe("environmentBootstrap", () => {
     });
   });
 
+  it("keeps an uppercase wss scheme secure when deriving the http url", () => {
+    vi.stubEnv("VITE_WS_URL", "WSS://remote.example.com");
+
+    expect(readPrimaryEnvironmentTarget()?.target).toEqual({
+      httpBaseUrl: "https://remote.example.com/",
+      wsBaseUrl: "wss://remote.example.com/",
+    });
+  });
+
+  it("keeps an uppercase https scheme secure when deriving the websocket url", () => {
+    vi.stubEnv("VITE_HTTP_URL", "HTTPS://remote.example.com");
+
+    expect(readPrimaryEnvironmentTarget()?.target).toEqual({
+      httpBaseUrl: "https://remote.example.com/",
+      wsBaseUrl: "wss://remote.example.com/",
+    });
+  });
+
   it("uses the current origin as the descriptor base for local dev environments", async () => {
     installTestBrowser("http://localhost:5735/");
     await installDescriptorApi();
@@ -173,12 +191,15 @@ describe("environmentBootstrap", () => {
         replaceState: vi.fn(),
       },
       desktopBridge: {
-        getLocalEnvironmentBootstrap: () => ({
-          label: "Local environment",
-          httpBaseUrl: "http://127.0.0.1:3773",
-          wsBaseUrl: "ws://127.0.0.1:3773",
-          bootstrapToken: "desktop-bootstrap-token",
-        }),
+        getLocalEnvironmentBootstraps: () => [
+          {
+            id: "primary",
+            label: "Windows",
+            httpBaseUrl: "http://127.0.0.1:3773",
+            wsBaseUrl: "ws://127.0.0.1:3773",
+            bootstrapToken: "desktop-bootstrap-token",
+          },
+        ],
       },
     });
     await installDescriptorApi();
@@ -212,11 +233,14 @@ describe("environmentBootstrap", () => {
       location: new URL("http://127.0.0.1:5733/"),
       history: { replaceState: vi.fn() },
       desktopBridge: {
-        getLocalEnvironmentBootstrap: () => ({
-          label: "Local environment",
-          httpBaseUrl: "http://127.0.0.1:3773",
-          bootstrapToken: "desktop-bootstrap-token",
-        }),
+        getLocalEnvironmentBootstraps: () => [
+          {
+            id: "primary",
+            label: "Local environment",
+            httpBaseUrl: "http://127.0.0.1:3773",
+            bootstrapToken: "desktop-bootstrap-token",
+          },
+        ],
       },
     });
 
@@ -231,6 +255,22 @@ describe("environmentBootstrap", () => {
       hasWsBaseUrl: false,
       message: "Desktop bootstrap is missing wsBaseUrl for the local environment.",
     });
+  });
+
+  it("has no primary target when the desktop local environment is disabled", () => {
+    vi.stubGlobal("window", {
+      location: new URL("t3code://app/"),
+      desktopBridge: {
+        getLocalEnvironmentEnabled: () => false,
+        getLocalEnvironmentBootstraps: () => [],
+      },
+    });
+
+    expect(readPrimaryEnvironmentTarget()).toBeNull();
+    expect(getPrimaryKnownEnvironment()).toBeNull();
+    expect(() => resolvePrimaryEnvironmentHttpUrl("/api/auth/session")).toThrow(
+      "The local environment is disabled.",
+    );
   });
 
   it("preserves an unsupported window-origin protocol", () => {

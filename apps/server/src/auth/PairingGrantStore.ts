@@ -5,6 +5,10 @@ import {
   type AuthPairingLink,
   type ServerAuthBootstrapMethod,
 } from "@t3tools/contracts";
+import {
+  DESKTOP_BOOTSTRAP_TOKEN_WINDOW_MS,
+  isValidDesktopBootstrapToken,
+} from "@t3tools/shared/desktopBootstrapToken";
 import * as Context from "effect/Context";
 import * as Crypto from "effect/Crypto";
 import * as DateTime from "effect/DateTime";
@@ -29,7 +33,7 @@ export interface BootstrapGrant {
   readonly expiresAt: DateTime.DateTime;
 }
 
-export class UnknownBootstrapCredentialError extends Schema.TaggedErrorClass<UnknownBootstrapCredentialError>()(
+export class UnknownBootstrapCredentialError extends Schema.TaggedError<UnknownBootstrapCredentialError>()(
   "UnknownBootstrapCredentialError",
   {},
 ) {
@@ -38,7 +42,7 @@ export class UnknownBootstrapCredentialError extends Schema.TaggedErrorClass<Unk
   }
 }
 
-export class ExpiredBootstrapCredentialError extends Schema.TaggedErrorClass<ExpiredBootstrapCredentialError>()(
+export class ExpiredBootstrapCredentialError extends Schema.TaggedError<ExpiredBootstrapCredentialError>()(
   "ExpiredBootstrapCredentialError",
   {},
 ) {
@@ -47,7 +51,7 @@ export class ExpiredBootstrapCredentialError extends Schema.TaggedErrorClass<Exp
   }
 }
 
-export class BootstrapCredentialProofKeyMismatchError extends Schema.TaggedErrorClass<BootstrapCredentialProofKeyMismatchError>()(
+export class BootstrapCredentialProofKeyMismatchError extends Schema.TaggedError<BootstrapCredentialProofKeyMismatchError>()(
   "BootstrapCredentialProofKeyMismatchError",
   {},
 ) {
@@ -56,12 +60,21 @@ export class BootstrapCredentialProofKeyMismatchError extends Schema.TaggedError
   }
 }
 
-export class UnavailableBootstrapCredentialError extends Schema.TaggedErrorClass<UnavailableBootstrapCredentialError>()(
+export class UnavailableBootstrapCredentialError extends Schema.TaggedError<UnavailableBootstrapCredentialError>()(
   "UnavailableBootstrapCredentialError",
   {},
 ) {
   override get message(): string {
     return "Bootstrap credential is no longer available.";
+  }
+}
+
+export class BootstrapCredentialScopeNotGrantedError extends Schema.TaggedError<BootstrapCredentialScopeNotGrantedError>()(
+  "BootstrapCredentialScopeNotGrantedError",
+  {},
+) {
+  override get message(): string {
+    return "The requested authentication scope was not granted.";
   }
 }
 
@@ -72,9 +85,8 @@ export const BootstrapCredentialInvalidError = Schema.Union([
   UnavailableBootstrapCredentialError,
 ]);
 export type BootstrapCredentialInvalidError = typeof BootstrapCredentialInvalidError.Type;
-export const isBootstrapCredentialInvalidError = Schema.is(BootstrapCredentialInvalidError);
 
-export class ActivePairingLinksLoadError extends Schema.TaggedErrorClass<ActivePairingLinksLoadError>()(
+export class ActivePairingLinksLoadError extends Schema.TaggedError<ActivePairingLinksLoadError>()(
   "ActivePairingLinksLoadError",
   {
     cause: Schema.Defect(),
@@ -85,7 +97,7 @@ export class ActivePairingLinksLoadError extends Schema.TaggedErrorClass<ActiveP
   }
 }
 
-export class PairingLinkRevokeError extends Schema.TaggedErrorClass<PairingLinkRevokeError>()(
+export class PairingLinkRevokeError extends Schema.TaggedError<PairingLinkRevokeError>()(
   "PairingLinkRevokeError",
   {
     pairingLinkId: Schema.String,
@@ -97,7 +109,7 @@ export class PairingLinkRevokeError extends Schema.TaggedErrorClass<PairingLinkR
   }
 }
 
-export class PairingCredentialIssueError extends Schema.TaggedErrorClass<PairingCredentialIssueError>()(
+export class PairingCredentialIssueError extends Schema.TaggedError<PairingCredentialIssueError>()(
   "PairingCredentialIssueError",
   {
     pairingLinkId: Schema.String,
@@ -111,7 +123,7 @@ export class PairingCredentialIssueError extends Schema.TaggedErrorClass<Pairing
   }
 }
 
-export class PairingCredentialRandomGenerationError extends Schema.TaggedErrorClass<PairingCredentialRandomGenerationError>()(
+export class PairingCredentialRandomGenerationError extends Schema.TaggedError<PairingCredentialRandomGenerationError>()(
   "PairingCredentialRandomGenerationError",
   {
     operation: Schema.Literals(["generate-id", "generate-token"]),
@@ -123,7 +135,7 @@ export class PairingCredentialRandomGenerationError extends Schema.TaggedErrorCl
   }
 }
 
-export class BootstrapCredentialConsumeError extends Schema.TaggedErrorClass<BootstrapCredentialConsumeError>()(
+export class BootstrapCredentialConsumeError extends Schema.TaggedError<BootstrapCredentialConsumeError>()(
   "BootstrapCredentialConsumeError",
   {
     cause: Schema.Defect(),
@@ -134,7 +146,7 @@ export class BootstrapCredentialConsumeError extends Schema.TaggedErrorClass<Boo
   }
 }
 
-export class BootstrapCredentialConsumeAvailableError extends Schema.TaggedErrorClass<BootstrapCredentialConsumeAvailableError>()(
+export class BootstrapCredentialConsumeAvailableError extends Schema.TaggedError<BootstrapCredentialConsumeAvailableError>()(
   "BootstrapCredentialConsumeAvailableError",
   {
     cause: Schema.Defect(),
@@ -145,7 +157,7 @@ export class BootstrapCredentialConsumeAvailableError extends Schema.TaggedError
   }
 }
 
-export class BootstrapCredentialLookupError extends Schema.TaggedErrorClass<BootstrapCredentialLookupError>()(
+export class BootstrapCredentialLookupError extends Schema.TaggedError<BootstrapCredentialLookupError>()(
   "BootstrapCredentialLookupError",
   {
     cause: Schema.Defect(),
@@ -171,9 +183,9 @@ export const isBootstrapCredentialInternalError = Schema.is(BootstrapCredentialI
 export const BootstrapCredentialError = Schema.Union([
   BootstrapCredentialInvalidError,
   BootstrapCredentialInternalError,
+  BootstrapCredentialScopeNotGrantedError,
 ]);
 export type BootstrapCredentialError = typeof BootstrapCredentialError.Type;
-export const isBootstrapCredentialError = Schema.is(BootstrapCredentialError);
 
 export interface IssuedBootstrapCredential {
   readonly id: string;
@@ -202,6 +214,7 @@ export class PairingGrantStore extends Context.Service<
       readonly subject?: string;
       readonly label?: string;
       readonly proofKeyThumbprint?: string;
+      readonly purpose?: "startup";
     }) => Effect.Effect<IssuedBootstrapCredential, BootstrapCredentialInternalError>;
     readonly listActive: () => Effect.Effect<
       ReadonlyArray<AuthPairingLink>,
@@ -213,6 +226,7 @@ export class PairingGrantStore extends Context.Service<
       credential: string,
       input?: {
         readonly proofKeyThumbprint?: string;
+        readonly requestedScopes?: ReadonlyArray<AuthEnvironmentScope>;
       },
     ) => Effect.Effect<BootstrapGrant, BootstrapCredentialError>;
   }
@@ -225,7 +239,7 @@ interface StoredBootstrapGrant extends BootstrapGrant {
 type ConsumeResult =
   | {
       readonly _tag: "error";
-      readonly reason: "not-found" | "expired";
+      readonly reason: "not-found" | "expired" | "scope-not-granted";
       readonly error: BootstrapCredentialError;
     }
   | {
@@ -234,6 +248,8 @@ type ConsumeResult =
     };
 
 const DEFAULT_ONE_TIME_TOKEN_TTL_MINUTES = Duration.minutes(5);
+const DESKTOP_BOOTSTRAP_TTL_HOURS = Duration.hours(24);
+const DEV_STARTUP_TTL_HOURS = Duration.hours(24);
 const PAIRING_TOKEN_ALPHABET = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ";
 const PAIRING_TOKEN_LENGTH = 12;
 const PAIRING_TOKEN_REJECTION_LIMIT =
@@ -288,16 +304,29 @@ export const make = Effect.gen(function* () {
       id,
     }).pipe(Effect.asVoid);
 
-  if (config.desktopBootstrapToken) {
+  // A desktop that sends its secret rotates the renderer's token, so accept
+  // whichever token the secret derives for the current window instead of
+  // seeding one fixed token. Older desktops only send the token.
+  const desktopBootstrapSecret = config.desktopBootstrapSecret;
+  const consumeRotatingDesktopToken = (credential: string, nowMs: number) =>
+    desktopBootstrapSecret !== undefined &&
+    isValidDesktopBootstrapToken(desktopBootstrapSecret, credential, nowMs);
+
+  if (config.desktopBootstrapToken && desktopBootstrapSecret === undefined) {
     const now = yield* DateTime.now;
     yield* seedGrant(config.desktopBootstrapToken, {
       method: "desktop-bootstrap",
       scopes: AuthAdministrativeScopes,
       subject: "desktop-bootstrap",
       expiresAt: DateTime.add(now, {
-        milliseconds: Duration.toMillis(DEFAULT_ONE_TIME_TOKEN_TTL_MINUTES),
+        milliseconds: Duration.toMillis(DESKTOP_BOOTSTRAP_TTL_HOURS),
       }),
-      remainingUses: 1,
+      // Unbounded uses so the renderer can re-exchange the seed for a
+      // fresh bearer session after a page reload (or after the prior
+      // bearer expires). The seed itself stays inside the desktop
+      // process and the rendered page, both of which the user already
+      // implicitly trusts.
+      remainingUses: "unbounded",
     });
   }
 
@@ -312,7 +341,6 @@ export const make = Effect.gen(function* () {
         row.label
           ? ({
               id: row.id,
-              credential: row.credential,
               scopes: row.scopes,
               subject: row.subject,
               label: row.label,
@@ -321,7 +349,6 @@ export const make = Effect.gen(function* () {
             } satisfies AuthPairingLink)
           : ({
               id: row.id,
-              credential: row.credential,
               scopes: row.scopes,
               subject: row.subject,
               createdAt: row.createdAt,
@@ -351,13 +378,19 @@ export const make = Effect.gen(function* () {
   const issueOneTimeToken: PairingGrantStore["Service"]["issueOneTimeToken"] = Effect.fn(
     "PairingGrantStore.issueOneTimeToken",
   )(function* (input) {
-    const id = yield* crypto.randomUUIDv4.pipe(
-      Effect.mapError(
-        (cause) => new PairingCredentialRandomGenerationError({ operation: "generate-id", cause }),
-      ),
-    );
+    const id = yield* crypto
+      .randomUUIDv4()
+      .pipe(
+        Effect.mapError(
+          (cause) =>
+            new PairingCredentialRandomGenerationError({ operation: "generate-id", cause }),
+        ),
+      );
     const credential = yield* generatePairingToken;
-    const ttl = input?.ttl ?? DEFAULT_ONE_TIME_TOKEN_TTL_MINUTES;
+    const isDevStartupToken = config.devUrl !== undefined && input?.purpose === "startup";
+    const ttl =
+      input?.ttl ??
+      (isDevStartupToken ? DEV_STARTUP_TTL_HOURS : DEFAULT_ONE_TIME_TOKEN_TTL_MINUTES);
     const now = yield* DateTime.now;
     const expiresAt = DateTime.add(now, { milliseconds: Duration.toMillis(ttl) });
     const issued: IssuedBootstrapCredential = {
@@ -393,7 +426,6 @@ export const make = Effect.gen(function* () {
       );
     yield* emitUpsert({
       id,
-      credential,
       scopes: input?.scopes ?? AuthStandardClientScopes,
       subject: input?.subject ?? "one-time-token",
       ...(input?.label ? { label: input.label } : {}),
@@ -406,6 +438,16 @@ export const make = Effect.gen(function* () {
   const consume: PairingGrantStore["Service"]["consume"] = Effect.fn("PairingGrantStore.consume")(
     function* (credential, input) {
       const now = yield* DateTime.now;
+      if (consumeRotatingDesktopToken(credential, now.epochMilliseconds)) {
+        return {
+          method: "desktop-bootstrap",
+          scopes: AuthAdministrativeScopes,
+          subject: "desktop-bootstrap",
+          expiresAt: DateTime.add(now, {
+            milliseconds: DESKTOP_BOOTSTRAP_TOKEN_WINDOW_MS,
+          }),
+        } satisfies BootstrapGrant;
+      }
       const seededResult: ConsumeResult = yield* Ref.modify(
         seededGrantsRef,
         (current): readonly [ConsumeResult, Map<string, StoredBootstrapGrant>] => {
@@ -442,6 +484,20 @@ export const make = Effect.gen(function* () {
                 error: new BootstrapCredentialProofKeyMismatchError({}),
               },
               next,
+            ];
+          }
+
+          if (
+            input?.requestedScopes !== undefined &&
+            !input.requestedScopes.some((scope) => grant.scopes.includes(scope))
+          ) {
+            return [
+              {
+                _tag: "error",
+                reason: "scope-not-granted",
+                error: new BootstrapCredentialScopeNotGrantedError({}),
+              },
+              current,
             ];
           }
 
@@ -483,10 +539,16 @@ export const make = Effect.gen(function* () {
         return yield* seededResult.error;
       }
 
+      // The scope check is part of the UPDATE's WHERE clause so a rejected
+      // request cannot consume a one-time link. The re-check below only
+      // explains why nothing matched.
       const consumed = yield* pairingLinks
         .consumeAvailable({
           credential,
           proofKeyThumbprint: input?.proofKeyThumbprint ?? null,
+          ...(input?.requestedScopes !== undefined
+            ? { requestedScopes: input.requestedScopes }
+            : {}),
           consumedAt: now,
           now,
         })
@@ -530,6 +592,13 @@ export const make = Effect.gen(function* () {
         matching.value.proofKeyThumbprint !== input?.proofKeyThumbprint
       ) {
         return yield* new BootstrapCredentialProofKeyMismatchError({});
+      }
+
+      if (
+        input?.requestedScopes !== undefined &&
+        !input.requestedScopes.some((scope) => matching.value.scopes.includes(scope))
+      ) {
+        return yield* new BootstrapCredentialScopeNotGrantedError({});
       }
 
       return yield* new UnavailableBootstrapCredentialError({});
