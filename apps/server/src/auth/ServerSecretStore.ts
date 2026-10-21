@@ -8,6 +8,7 @@ import * as Path from "effect/Path";
 import * as Predicate from "effect/Predicate";
 import * as PlatformError from "effect/PlatformError";
 import * as Schema from "effect/Schema";
+import * as NodeCrypto from "node:crypto";
 
 import * as ServerConfig from "../config.ts";
 
@@ -169,6 +170,16 @@ export const make = Effect.gen(function* () {
   );
 
   const resolveSecretPath = (name: string) => path.join(serverConfig.secretsDir, `${name}.bin`);
+  const encryptionKeyPath = path.join(serverConfig.secretsDir, SECRET_STORE_KEY_FILENAME);
+  const encryptionKey = yield* loadOrCreateEncryptionKey(encryptionKeyPath).pipe(
+    Effect.mapError(
+      (cause) =>
+        new SecretStoreSecureError({
+          resource: `secret store key ${encryptionKeyPath}`,
+          cause,
+        }),
+    ),
+  );
 
   const get: ServerSecretStore["Service"]["get"] = (name) =>
     fileSystem.readFile(resolveSecretPath(name)).pipe(
@@ -225,23 +236,34 @@ export const make = Effect.gen(function* () {
 
   const create: ServerSecretStore["Service"]["create"] = (name, value) => {
     const secretPath = resolveSecretPath(name);
-    return Effect.scoped(
-      Effect.gen(function* () {
-        const file = yield* fileSystem.open(secretPath, {
-          flag: "wx",
-          mode: 0o600,
-        });
-        yield* file.writeAll(value);
-        yield* file.sync;
-        yield* fileSystem.chmod(secretPath, 0o600);
-      }),
-    ).pipe(
-      Effect.mapError(
-        (cause) =>
-          new SecretStorePersistError({
-            resource: `secret ${name}`,
-            cause,
+    return Effect.try({
+      try: () => encryptSecretBytes(encryptionKey, value),
+      catch: (cause) =>
+        new SecretStoreEncodeError({
+          resource: `secret ${name}`,
+          cause,
+        }),
+    }).pipe(
+      Effect.flatMap((encryptedValue) =>
+        Effect.scoped(
+          Effect.gen(function* () {
+            const file = yield* fileSystem.open(secretPath, {
+              flag: "wx",
+              mode: 0o600,
+            });
+            yield* file.writeAll(encryptedValue);
+            yield* file.sync;
+            yield* fileSystem.chmod(secretPath, 0o600);
           }),
+        ).pipe(
+          Effect.mapError(
+            (cause) =>
+              new SecretStorePersistError({
+                resource: `secret ${name}`,
+                cause,
+              }),
+          ),
+        ),
       ),
     );
   };

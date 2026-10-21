@@ -10,7 +10,6 @@ import {
   type PullRequestContextMetadata,
   type ScopedThreadRef,
   type ServerProviderSkill,
-  type ServerProviderSlashCommand,
 } from "@t3tools/contracts";
 import {
   BlocksIcon,
@@ -52,7 +51,15 @@ export type ComposerCommandItem =
       id: string;
       type: "provider-slash-command";
       provider: ProviderDriverKind;
-      command: ServerProviderSlashCommand;
+      sourceKind?: "agents";
+      command: ComposerSlashCommandLike;
+      label: string;
+      description: string;
+    }
+  | {
+      id: string;
+      type: "custom-slash-command";
+      command: ComposerSlashCommandLike;
       label: string;
       description: string;
     }
@@ -61,6 +68,7 @@ export type ComposerCommandItem =
       type: "skill";
       provider: ProviderDriverKind;
       skill: ServerProviderSkill;
+      sourceKind?: "agents";
       label: string;
       description: string;
     }

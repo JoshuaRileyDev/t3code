@@ -118,7 +118,7 @@ export function expandCollapsedComposerCursor(
 ): number {
   if (literalText) return clampCursor(text, cursorInput);
   const collapsedCursor = clampCursor(text, cursorInput);
-  const segments = splitPromptIntoComposerSegments(text);
+  const segments = splitPromptIntoComposerSegments(text, [], slashCommands);
   if (segments.length === 0) {
     return collapsedCursor;
   }
@@ -189,7 +189,7 @@ export function clampCollapsedComposerCursor(
 ): number {
   if (literalText) return clampCursor(text, cursorInput);
   return clampCollapsedComposerCursorForSegments(
-    splitPromptIntoComposerSegments(text),
+    splitPromptIntoComposerSegments(text, [], slashCommands),
     cursorInput,
   );
 }
@@ -201,7 +201,7 @@ export function collapseExpandedComposerCursor(
 ): number {
   if (literalText) return clampCursor(text, cursorInput);
   const expandedCursor = clampCursor(text, cursorInput);
-  const segments = splitPromptIntoComposerSegments(text);
+  const segments = splitPromptIntoComposerSegments(text, [], slashCommands);
   if (segments.length === 0) {
     return expandedCursor;
   }
@@ -254,8 +254,9 @@ export function isCollapsedCursorAdjacentToInlineToken(
   text: string,
   cursorInput: number,
   direction: "left" | "right",
+  slashCommands: ReadonlyArray<ComposerSlashCommandLike> = [],
 ): boolean {
-  const segments = splitPromptIntoComposerSegments(text);
+  const segments = splitPromptIntoComposerSegments(text, [], slashCommands);
   if (!segments.some(isInlineTokenSegment)) {
     return false;
   }

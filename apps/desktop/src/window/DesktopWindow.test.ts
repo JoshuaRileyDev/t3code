@@ -493,6 +493,39 @@ describe("DesktopWindow", () => {
     );
   });
 
+  it.effect("does not open a development window until the backend is ready", () =>
+    Effect.gen(function* () {
+      const fakeWindow = makeFakeBrowserWindow();
+      const createCount = yield* Ref.make(0);
+      const mainWindow = yield* Ref.make<Option.Option<Electron.BrowserWindow>>(Option.none());
+      const createdWindowOptions: Electron.BrowserWindowConstructorOptions[] = [];
+      const layer = layerTest({
+        window: fakeWindow.window,
+        createCount,
+        mainWindow,
+        createdWindowOptions,
+      });
+
+      yield* Effect.gen(function* () {
+        const desktopWindow = yield* DesktopWindow.DesktopWindow;
+        yield* desktopWindow.activate;
+        assert.equal(yield* Ref.get(createCount), 0);
+
+        yield* desktopWindow.handleBackendReady(new URL("http://127.0.0.1:3773"));
+        assert.equal(yield* Ref.get(createCount), 1);
+        assert.equal(createdWindowOptions[0]?.width, 1100);
+        assert.equal(createdWindowOptions[0]?.height, 780);
+        assert.isUndefined(createdWindowOptions[0]?.x);
+        assert.isUndefined(createdWindowOptions[0]?.y);
+        assert.isTrue(createdWindowOptions[0]?.disableAutoHideCursor);
+        assert.isFalse(createdWindowOptions[0]?.webPreferences?.backgroundThrottling);
+        assert.deepEqual(fakeWindow.setAutoHideCursor.mock.calls, [[false]]);
+        assert.deepEqual(fakeWindow.loadURL.mock.calls[0], ["http://127.0.0.1:5733/"]);
+        assert.equal(fakeWindow.openDevTools.mock.calls.length, 1);
+      }).pipe(Effect.provide(layer));
+    }),
+  );
+
   it.effect(
     "opens and reopens the window without backend readiness when local execution is disabled",
     () =>

@@ -5,6 +5,10 @@ import {
   collectComposerInlineTokens,
   type ComposerInlineToken,
 } from "@t3tools/shared/composerInlineTokens";
+import {
+  collectComposerSlashCommandTokens,
+  type ComposerSlashCommandLike,
+} from "./lib/composerSlashCommands";
 
 export type ComposerPromptSegment =
   | {
@@ -95,6 +99,13 @@ export function collectComposerPromptInlineTokens(text: string) {
 }
 
 function splitPromptTextIntoComposerSegments(text: string): ComposerPromptSegment[] {
+  return splitPromptTextIntoComposerSegmentsWithSlashCommands(text, []);
+}
+
+function splitPromptTextIntoComposerSegmentsWithSlashCommands(
+  text: string,
+  slashCommands: ReadonlyArray<ComposerSlashCommandLike>,
+): ComposerPromptSegment[] {
   const segments: ComposerPromptSegment[] = [];
   if (!text) {
     return segments;
@@ -126,6 +137,11 @@ function splitPromptTextIntoComposerSegments(text: string): ComposerPromptSegmen
         type: "mention",
         path: match.value,
         source: match.source,
+      });
+    } else if (match.type === "slash-command") {
+      segments.push({
+        type: "slash-command",
+        name: match.name,
       });
     } else {
       segments.push({ type: "skill", name: match.value, source: match.source });

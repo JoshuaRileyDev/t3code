@@ -253,6 +253,7 @@ interface ChatMarkdownProps {
   onTaskListChange?: ((input: { markerOffset: number; checked: boolean }) => void) | undefined;
   isStreaming?: boolean;
   skills?: ReadonlyArray<Pick<ServerProviderSkill, "name" | "displayName">>;
+  slashCommands?: ReadonlyArray<ComposerSlashCommandLike>;
   className?: string;
   lineBreaks?: boolean;
   parseRawHtml?: boolean;

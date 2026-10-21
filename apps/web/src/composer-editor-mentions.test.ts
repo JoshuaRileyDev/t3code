@@ -34,6 +34,8 @@ const citation: AssistantCitation = {
   suffix: " 後",
 };
 
+const slashCommands = [{ name: "ui", description: "Explore and refine UI" }];
+
 describe("splitPromptIntoComposerSegments", () => {
   it("splits mention tokens followed by whitespace into mention segments", () => {
     expect(splitPromptIntoComposerSegments("Inspect @AGENTS.md please")).toEqual([

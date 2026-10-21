@@ -494,6 +494,26 @@ describe("collapseExpandedComposerCursor", () => {
     expect(collapsedCursor).toBe("install @scope/pkg then ".length + 1 + " ".length);
     expect(expandCollapsedComposerCursor(text, collapsedCursor)).toBe(expandedCursor);
   });
+
+  it.each(["$", "€", "𑿝"])("maps expanded %s skill cursor back to collapsed cursor", (prefix) => {
+    const text = `run ${prefix}review-follow-up then`;
+    const collapsedCursorAfterSkill = "run ".length + 2;
+    const expandedCursorAfterSkill = `run ${prefix}review-follow-up `.length;
+
+    expect(collapseExpandedComposerCursor(text, expandedCursorAfterSkill)).toBe(
+      collapsedCursorAfterSkill,
+    );
+  });
+
+  it("maps expanded slash-command cursor back to collapsed cursor", () => {
+    const text = "run /ui then";
+    const collapsedCursorAfterCommand = "run /ui ".length;
+    const expandedCursorAfterCommand = "run /ui ".length;
+
+    expect(collapseExpandedComposerCursor(text, expandedCursorAfterCommand, slashCommands)).toBe(
+      collapsedCursorAfterCommand,
+    );
+  });
 });
 
 it("preserves the caret before trailing text after mixed-width skill chips", () => {
@@ -587,6 +607,42 @@ describe("isCollapsedCursorAdjacentToInlineToken", () => {
 
     expect(isCollapsedCursorAdjacentToInlineToken(text, tokenEnd, "left")).toBe(true);
     expect(isCollapsedCursorAdjacentToInlineToken(text, tokenStart, "right")).toBe(true);
+  });
+
+  it("treats skill pills as inline tokens for adjacency checks", () => {
+    const text = "run $review-follow-up next";
+    const tokenStart = "run ".length;
+    const tokenEnd = tokenStart + 1;
+
+    expect(isCollapsedCursorAdjacentToInlineToken(text, tokenEnd, "left")).toBe(true);
+    expect(isCollapsedCursorAdjacentToInlineToken(text, tokenStart, "right")).toBe(true);
+  });
+
+  it("treats slash-command pills as inline tokens for adjacency checks", () => {
+    const text = "run /ui next";
+    const tokenStart = "run ".length;
+    const tokenEnd = tokenStart + 1;
+
+    expect(isCollapsedCursorAdjacentToInlineToken(text, tokenEnd, "left", slashCommands)).toBe(
+      true,
+    );
+    expect(isCollapsedCursorAdjacentToInlineToken(text, tokenStart, "right", slashCommands)).toBe(
+      true,
+    );
+  });
+});
+
+describe("parseStandaloneComposerSlashCommand", () => {
+  it("parses standalone /plan command", () => {
+    expect(parseStandaloneComposerSlashCommand(" /plan ")).toBe("plan");
+  });
+
+  it("parses standalone /default command", () => {
+    expect(parseStandaloneComposerSlashCommand("/default")).toBe("default");
+  });
+
+  it("ignores slash commands with extra message text", () => {
+    expect(parseStandaloneComposerSlashCommand("/plan explain this")).toBeNull();
   });
 });
 

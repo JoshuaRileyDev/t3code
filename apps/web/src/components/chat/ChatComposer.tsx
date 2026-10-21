@@ -6259,7 +6259,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
           options?.detectTrigger && !isLiteralPendingAnswer
             ? detectComposerTrigger(
                 promptForState,
-                expandCollapsedComposerCursor(promptForState, cursor),
+                expandCollapsedComposerCursor(promptForState, cursor, composerSlashCommands),
               )
             : null,
         );
@@ -6281,6 +6281,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
         const nextCollapsedCursor = collapseExpandedComposerCursor(
           insertion.prompt,
           insertion.cursor,
+          composerSlashCommands,
         );
         const inserted = insertComposerDraftTerminalContext(
           composerDraftTarget,

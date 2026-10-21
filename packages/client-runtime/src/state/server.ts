@@ -1301,6 +1301,16 @@ export function createServerEnvironmentAtoms<R, E>(
         key: ({ environmentId, input }) => `${environmentId}:${input.instanceId}`,
       },
     }),
+    testIntegrationToken: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:server:test-integration-token",
+      tag: WS_METHODS.serverTestIntegrationToken,
+      scheduler: configScheduler,
+      concurrency: configConcurrency,
+    }),
+    listIntegrationRepositories: createEnvironmentRpcQueryAtomFamily(runtime, {
+      label: "environment-data:server:list-integration-repositories",
+      tag: WS_METHODS.serverListIntegrationRepositories,
+    }),
     signalProcess: createEnvironmentRpcCommand(runtime, {
       label: "environment-data:server:signal-process",
       tag: WS_METHODS.serverSignalProcess,

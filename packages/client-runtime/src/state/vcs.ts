@@ -334,6 +334,12 @@ export function createVcsEnvironmentAtoms<R, E>(
       concurrency: vcsCommandConcurrency,
       onSettled: invalidateRefs,
     }),
+    deleteRef: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:vcs:delete-ref",
+      tag: WS_METHODS.vcsDeleteRef,
+      scheduler: vcsCommandScheduler,
+      concurrency: vcsCommandConcurrency,
+    }),
     createRef: createEnvironmentRpcCommand(runtime, {
       label: "environment-data:vcs:create-ref",
       tag: WS_METHODS.vcsCreateRef,

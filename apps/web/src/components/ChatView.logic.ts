@@ -1115,6 +1115,49 @@ export async function waitForRevertedMessage(
   });
 }
 
+export async function waitForSettledServerThread(
+  threadRef: ScopedThreadRef,
+  timeoutMs = 30_000,
+): Promise<boolean> {
+  const threadAtom = environmentThreadDetails.detailAtom(threadRef);
+  const getThread = () => appAtomRegistry.get(threadAtom);
+  const isSettled = () =>
+    isLatestTurnSettled(getThread()?.latestTurn ?? null, getThread()?.session ?? null);
+
+  if (isSettled()) {
+    return true;
+  }
+
+  return await new Promise<boolean>((resolve) => {
+    let settled = false;
+    let timeoutId: ReturnType<typeof globalThis.setTimeout> | null = null;
+    const finish = (result: boolean) => {
+      if (settled) return;
+      settled = true;
+      if (timeoutId !== null) {
+        globalThis.clearTimeout(timeoutId);
+      }
+      unsubscribe();
+      resolve(result);
+    };
+
+    const unsubscribe = appAtomRegistry.subscribe(threadAtom, () => {
+      if (isSettled()) {
+        finish(true);
+      }
+    });
+
+    if (isSettled()) {
+      finish(true);
+      return;
+    }
+
+    timeoutId = globalThis.setTimeout(() => {
+      finish(false);
+    }, timeoutMs);
+  });
+}
+
 export interface LocalDispatchSnapshot {
   startedAt: string;
   preparingWorktree: boolean;

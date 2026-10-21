@@ -12,6 +12,7 @@ import {
   type VcsCreateRefResult,
   type VcsCreateWorktreeInput,
   type VcsCreateWorktreeResult,
+  type VcsDeleteRefInput,
   type VcsListRefsInput,
   type VcsListRefsResult,
   type GitManagerServiceError,

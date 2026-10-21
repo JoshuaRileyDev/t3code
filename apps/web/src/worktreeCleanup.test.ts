@@ -66,3 +66,57 @@ describe("getOrphanedWorktreePathForThread", () => {
     expect(result).toBe("/tmp/repo/worktrees/feature-a");
   });
 });
+
+describe("getOrphanedBranchNameForThread", () => {
+  it("returns null when the target thread does not exist", () => {
+    const result = getOrphanedBranchNameForThread([], ThreadId.make("missing-thread"));
+    expect(result).toBeNull();
+  });
+
+  it("returns null when the target thread has no branch", () => {
+    const threads = [makeThread()];
+    const result = getOrphanedBranchNameForThread(threads, ThreadId.make("thread-1"));
+    expect(result).toBeNull();
+  });
+
+  it("returns the branch when no other thread links to it", () => {
+    const threads = [makeThread({ branch: "feature-a" })];
+    const result = getOrphanedBranchNameForThread(threads, ThreadId.make("thread-1"));
+    expect(result).toBe("feature-a");
+  });
+
+  it("returns null when another thread links to the same branch", () => {
+    const threads = [
+      makeThread({ id: ThreadId.make("thread-1"), branch: "feature-a" }),
+      makeThread({ id: ThreadId.make("thread-2"), branch: "feature-a" }),
+    ];
+    const result = getOrphanedBranchNameForThread(threads, ThreadId.make("thread-1"));
+    expect(result).toBeNull();
+  });
+});
+
+describe("formatWorktreePathForDisplay", () => {
+  it("shows only the last path segment for unix-like paths", () => {
+    const result = formatWorktreePathForDisplay(
+      "/Users/julius/.t3/worktrees/t3code-mvp/t3code-4e609bb8",
+    );
+    expect(result).toBe("t3code-4e609bb8");
+  });
+
+  it("normalizes windows separators before selecting the final segment", () => {
+    const result = formatWorktreePathForDisplay(
+      "C:\\Users\\julius\\.t3\\worktrees\\t3code-mvp\\t3code-4e609bb8",
+    );
+    expect(result).toBe("t3code-4e609bb8");
+  });
+
+  it("uses the final segment even when outside ~/.t3/worktrees", () => {
+    const result = formatWorktreePathForDisplay("/tmp/custom-worktrees/my-worktree");
+    expect(result).toBe("my-worktree");
+  });
+
+  it("ignores trailing slashes", () => {
+    const result = formatWorktreePathForDisplay("/tmp/custom-worktrees/my-worktree/");
+    expect(result).toBe("my-worktree");
+  });
+});

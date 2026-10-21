@@ -41,8 +41,9 @@ function scoreSlashCommandItem(item: SlashSearchItem, query: string): number | n
   }
 
   const primaryValue =
-    item.type === "slash-command" ? item.command.toLowerCase() : item.command.name.toLowerCase();
-  const description = item.description.toLowerCase();
+    item.type === "slash-command"
+      ? item.command.toLowerCase()
+      : (item.command.displayName ?? item.command.name).toLowerCase();
 
   const scores = [
     scoreQueryMatch({
@@ -55,14 +56,18 @@ function scoreSlashCommandItem(item: SlashSearchItem, query: string): number | n
       fuzzyBase: 100,
       boundaryMarkers: ["-", "_", "/"],
     }),
-    scoreQueryMatch({
-      value: description,
-      query,
-      exactBase: 20,
-      prefixBase: 22,
-      boundaryBase: 24,
-      includesBase: 26,
-    }),
+    ...(item.type === "slash-command"
+      ? []
+      : [
+          scoreQueryMatch({
+            value: item.description.toLowerCase(),
+            query,
+            exactBase: 20,
+            prefixBase: 22,
+            boundaryBase: 24,
+            includesBase: 26,
+          }),
+        ]),
   ].filter((score): score is number => score !== null);
 
   if (scores.length === 0) {

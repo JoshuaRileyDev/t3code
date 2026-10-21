@@ -234,6 +234,90 @@ describe("ServerSettings.sourceControlWritingStyle", () => {
   });
 });
 
+describe("ServerSettingsPatch.providerInstances", () => {
+  it("treats providerInstances as an optional whole-map replacement", () => {
+    const patch = decodeServerSettingsPatch({});
+    expect(patch.providerInstances).toBeUndefined();
+
+    const replacement = decodeServerSettingsPatch({
+      providerInstances: {
+        codex_personal: { driver: "codex", config: { homePath: "~/.codex" } },
+      },
+    });
+    expect(replacement.providerInstances).toBeDefined();
+    expect(replacement.providerInstances?.[ProviderInstanceId.make("codex_personal")]?.driver).toBe(
+      "codex",
+    );
+  });
+
+  it("preserves a fork-defined driver entry through patch decoding", () => {
+    const patch = decodeServerSettingsPatch({
+      providerInstances: {
+        ollama_local: {
+          driver: "ollama",
+          config: { endpoint: "http://localhost:11434" },
+        },
+      },
+    });
+    const ollamaId = ProviderInstanceId.make("ollama_local");
+    expect(patch.providerInstances?.[ollamaId]?.driver).toBe("ollama");
+  });
+});
+
+describe("ServerSettingsPatch.integrations", () => {
+  it("treats integrations as an optional whole-map replacement", () => {
+    const patch = decodeServerSettingsPatch({});
+    expect(patch.integrations).toBeUndefined();
+
+    const replacement = decodeServerSettingsPatch({
+      integrations: { github: [], gitlab: [], jira: [], linear: [] },
+    });
+    expect(replacement.integrations).toEqual({ github: [], gitlab: [], jira: [], linear: [] });
+  });
+});
+
+describe("ServerSettingsPatch string normalization", () => {
+  it("trims string settings while decoding patches", () => {
+    const patch = decodeServerSettingsPatch({
+      addProjectBaseDirectory: "  ~/Development  ",
+      textGenerationModelSelection: { model: "  gpt-5.4-mini  " },
+      observability: {
+        otlpTracesUrl: "  http://localhost:4318/v1/traces  ",
+      },
+      providerInstances: {
+        codex_personal: {
+          driver: "  codex  ",
+          displayName: "  Codex Personal  ",
+          config: { homePath: "  ~/.codex-personal  " },
+        },
+      },
+    });
+
+    expect(patch.addProjectBaseDirectory).toBe("~/Development");
+    expect(patch.textGenerationModelSelection?.model).toBe("gpt-5.4-mini");
+    expect(patch.observability?.otlpTracesUrl).toBe("http://localhost:4318/v1/traces");
+    expect(patch.providerInstances?.[ProviderInstanceId.make("codex_personal")]?.driver).toBe(
+      "codex",
+    );
+    expect(patch.providerInstances?.[ProviderInstanceId.make("codex_personal")]?.displayName).toBe(
+      "Codex Personal",
+    );
+    expect(patch.providerInstances?.[ProviderInstanceId.make("codex_personal")]?.config).toEqual({
+      homePath: "  ~/.codex-personal  ",
+    });
+  });
+
+  it("trims encoded server settings values before validation", () => {
+    const defaultSettings = decodeServerSettings({});
+    const encoded = encodeServerSettings({
+      ...defaultSettings,
+      addProjectBaseDirectory: "  ~/Development  ",
+    });
+
+    expect(encoded.addProjectBaseDirectory).toBe("~/Development");
+  });
+});
+
 describe("ServerSettings environment icon", () => {
   it("decodes a kind from a newer server as null instead of failing the snapshot", () => {
     expect(decodeServerSettings({ environmentIcon: "toaster" }).environmentIcon).toBeNull();

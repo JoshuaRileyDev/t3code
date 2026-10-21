@@ -185,6 +185,7 @@ import {
   composerRequiresModifier,
   parseStandaloneComposerSlashCommand,
 } from "../composer-logic";
+import { collectComposerSlashCommands } from "../lib/composerSlashCommands";
 import {
   derivePhase,
   selectHandoffImageResources,
