@@ -102,7 +102,10 @@ export interface PullRequestMergeEvent extends PullRequestRef {
   readonly mergedAt: string;
 }
 
-type PullRequestReading = Pick<PullRequestSummary, "state" | "updatedAt" | "observedAt">;
+type PullRequestReading = Pick<
+  PullRequestSummary,
+  "state" | "isDraft" | "updatedAt" | "observedAt"
+>;
 
 function supersedesReading(current: PullRequestReading | undefined, next: PullRequestReading) {
   if (current === undefined) return true;
@@ -1215,19 +1218,21 @@ export const make = Effect.gen(function* () {
                     : null,
               };
             }),
-            Effect.orElseSucceed((): RepositoryBatch => ({
-              key,
-              entries: [],
-              errors: [
-                {
-                  projectId: project.project.id,
-                  projectTitle: project.project.title,
-                  message: `${project.repository} could not be read.`,
-                },
-              ],
-              truncated: false,
-              nextCursor: null,
-            })),
+            Effect.orElseSucceed(
+              (): RepositoryBatch => ({
+                key,
+                entries: [],
+                errors: [
+                  {
+                    projectId: project.project.id,
+                    projectTitle: project.project.title,
+                    message: `${project.repository} could not be read.`,
+                  },
+                ],
+                truncated: false,
+                nextCursor: null,
+              }),
+            ),
           );
       }
     };
@@ -1473,42 +1478,44 @@ export const make = Effect.gen(function* () {
         return read.pipe(
           Effect.mapError(toPullRequestError("summary")),
           observeRead,
-          Effect.map(({ value: changeRequest, observedAt }): PullRequestSummary => ({
-            provider: project.api.kind,
-            projectId: project.project.id,
-            repository: project.repository,
-            number: changeRequest.number,
-            title: changeRequest.title,
-            url: changeRequest.url,
-            state: changeRequest.state,
-            headBranch: changeRequest.headBranch,
-            baseBranch: changeRequest.baseBranch,
-            closedAt: changeRequest.closedAt ?? null,
-            mergedAt: changeRequest.mergedAt ?? null,
-            updatedAt: changeRequest.updatedAt,
-            observedAt,
-            ...(changeRequest.isDraft === undefined ? {} : { isDraft: changeRequest.isDraft }),
-            ...(changeRequest.author === undefined ? {} : { author: changeRequest.author }),
-            ...(changeRequest.additions === undefined
-              ? {}
-              : { additions: changeRequest.additions }),
-            ...(changeRequest.deletions === undefined
-              ? {}
-              : { deletions: changeRequest.deletions }),
-            ...(changeRequest.changedFiles === undefined
-              ? {}
-              : { changedFiles: changeRequest.changedFiles }),
-            ...(changeRequest.reviewDecision === undefined
-              ? {}
-              : { reviewDecision: changeRequest.reviewDecision }),
-            ...(changeRequest.checksState === undefined
-              ? {}
-              : { checksState: changeRequest.checksState }),
-            ...(changeRequest.mergeability === undefined
-              ? {}
-              : { mergeability: changeRequest.mergeability }),
-            ...(changeRequest.stack === undefined ? {} : { stack: changeRequest.stack }),
-          })),
+          Effect.map(
+            ({ value: changeRequest, observedAt }): PullRequestSummary => ({
+              provider: project.api.kind,
+              projectId: project.project.id,
+              repository: project.repository,
+              number: changeRequest.number,
+              title: changeRequest.title,
+              url: changeRequest.url,
+              state: changeRequest.state,
+              headBranch: changeRequest.headBranch,
+              baseBranch: changeRequest.baseBranch,
+              closedAt: changeRequest.closedAt ?? null,
+              mergedAt: changeRequest.mergedAt ?? null,
+              updatedAt: changeRequest.updatedAt,
+              observedAt,
+              ...(changeRequest.isDraft === undefined ? {} : { isDraft: changeRequest.isDraft }),
+              ...(changeRequest.author === undefined ? {} : { author: changeRequest.author }),
+              ...(changeRequest.additions === undefined
+                ? {}
+                : { additions: changeRequest.additions }),
+              ...(changeRequest.deletions === undefined
+                ? {}
+                : { deletions: changeRequest.deletions }),
+              ...(changeRequest.changedFiles === undefined
+                ? {}
+                : { changedFiles: changeRequest.changedFiles }),
+              ...(changeRequest.reviewDecision === undefined
+                ? {}
+                : { reviewDecision: changeRequest.reviewDecision }),
+              ...(changeRequest.checksState === undefined
+                ? {}
+                : { checksState: changeRequest.checksState }),
+              ...(changeRequest.mergeability === undefined
+                ? {}
+                : { mergeability: changeRequest.mergeability }),
+              ...(changeRequest.stack === undefined ? {} : { stack: changeRequest.stack }),
+            }),
+          ),
         );
       }),
     );
@@ -1563,55 +1570,57 @@ export const make = Effect.gen(function* () {
           ],
           { concurrency: 2 },
         ).pipe(
-          Effect.map(([{ value: changeRequest, observedAt }, viewer]): PullRequestDetail => ({
-            provider: project.api.kind,
-            capabilities: project.api.capabilities,
-            projectId: project.project.id,
-            projectTitle: project.project.title,
-            workspaceRoot: project.project.workspaceRoot,
-            repository: project.repository,
-            number: changeRequest.number,
-            title: changeRequest.title,
-            body: changeRequest.body,
-            url: changeRequest.url,
-            author: changeRequest.author,
-            state: changeRequest.state,
-            isDraft: changeRequest.isDraft,
-            mergeability: changeRequest.mergeability,
-            additions: changeRequest.additions,
-            deletions: changeRequest.deletions,
-            changedFiles: changeRequest.changedFiles,
-            headBranch: changeRequest.headBranch,
-            ...(changeRequest.headRepositoryNameWithOwner === undefined
-              ? {}
-              : { headRepositoryNameWithOwner: changeRequest.headRepositoryNameWithOwner }),
-            ...(changeRequest.headSha ? { headSha: changeRequest.headSha } : {}),
-            baseBranch: changeRequest.baseBranch,
-            createdAt: changeRequest.createdAt,
-            updatedAt: changeRequest.updatedAt,
-            observedAt,
-            mergedAt: changeRequest.mergedAt,
-            closedAt: changeRequest.closedAt,
-            reviewers: changeRequest.reviewers,
-            labels: changeRequest.labels,
-            checks: changeRequest.checks,
-            mergeCapabilities: changeRequest.mergeCapabilities,
-            viewerPermissions: changeRequest.viewerPermissions,
-            ...(viewer === null || viewer.trim().length === 0 ? {} : { viewer }),
-            ...(changeRequest.baseComparison === undefined
-              ? {}
-              : { baseComparison: changeRequest.baseComparison }),
-            ...(changeRequest.behindBy === undefined ? {} : { behindBy: changeRequest.behindBy }),
-            ...(changeRequest.autoMergeEnabled === undefined
-              ? {}
-              : { autoMergeEnabled: changeRequest.autoMergeEnabled }),
-            ...(changeRequest.autoMergeMethod === undefined
-              ? {}
-              : { autoMergeMethod: changeRequest.autoMergeMethod }),
-            ...(changeRequest.workflowApprovalsRequired === undefined
-              ? {}
-              : { workflowApprovalsRequired: changeRequest.workflowApprovalsRequired }),
-          })),
+          Effect.map(
+            ([{ value: changeRequest, observedAt }, viewer]): PullRequestDetail => ({
+              provider: project.api.kind,
+              capabilities: project.api.capabilities,
+              projectId: project.project.id,
+              projectTitle: project.project.title,
+              workspaceRoot: project.project.workspaceRoot,
+              repository: project.repository,
+              number: changeRequest.number,
+              title: changeRequest.title,
+              body: changeRequest.body,
+              url: changeRequest.url,
+              author: changeRequest.author,
+              state: changeRequest.state,
+              isDraft: changeRequest.isDraft,
+              mergeability: changeRequest.mergeability,
+              additions: changeRequest.additions,
+              deletions: changeRequest.deletions,
+              changedFiles: changeRequest.changedFiles,
+              headBranch: changeRequest.headBranch,
+              ...(changeRequest.headRepositoryNameWithOwner === undefined
+                ? {}
+                : { headRepositoryNameWithOwner: changeRequest.headRepositoryNameWithOwner }),
+              ...(changeRequest.headSha ? { headSha: changeRequest.headSha } : {}),
+              baseBranch: changeRequest.baseBranch,
+              createdAt: changeRequest.createdAt,
+              updatedAt: changeRequest.updatedAt,
+              observedAt,
+              mergedAt: changeRequest.mergedAt,
+              closedAt: changeRequest.closedAt,
+              reviewers: changeRequest.reviewers,
+              labels: changeRequest.labels,
+              checks: changeRequest.checks,
+              mergeCapabilities: changeRequest.mergeCapabilities,
+              viewerPermissions: changeRequest.viewerPermissions,
+              ...(viewer === null || viewer.trim().length === 0 ? {} : { viewer }),
+              ...(changeRequest.baseComparison === undefined
+                ? {}
+                : { baseComparison: changeRequest.baseComparison }),
+              ...(changeRequest.behindBy === undefined ? {} : { behindBy: changeRequest.behindBy }),
+              ...(changeRequest.autoMergeEnabled === undefined
+                ? {}
+                : { autoMergeEnabled: changeRequest.autoMergeEnabled }),
+              ...(changeRequest.autoMergeMethod === undefined
+                ? {}
+                : { autoMergeMethod: changeRequest.autoMergeMethod }),
+              ...(changeRequest.workflowApprovalsRequired === undefined
+                ? {}
+                : { workflowApprovalsRequired: changeRequest.workflowApprovalsRequired }),
+            }),
+          ),
         ),
       ),
     );
@@ -1660,19 +1669,21 @@ export const make = Effect.gen(function* () {
           })
           .pipe(
             Effect.mapError(toPullRequestError("activity")),
-            Effect.map((activity): PullRequestActivity => ({
-              ...(activity.author === undefined ? {} : { author: activity.author }),
-              ...(activity.reviewers === undefined ? {} : { reviewers: activity.reviewers }),
-              comments: activity.comments,
-              commentCount: activity.commentCount,
-              commentsTruncated: activity.commentsTruncated,
-              ...(activity.reviewThreadsTruncated === undefined
-                ? {}
-                : { reviewThreadsTruncated: activity.reviewThreadsTruncated }),
-              reviewThreads: activity.reviewThreads,
-              commits: activity.commits,
-              ...(activity.reactions === undefined ? {} : { reactions: activity.reactions }),
-            })),
+            Effect.map(
+              (activity): PullRequestActivity => ({
+                ...(activity.author === undefined ? {} : { author: activity.author }),
+                ...(activity.reviewers === undefined ? {} : { reviewers: activity.reviewers }),
+                comments: activity.comments,
+                commentCount: activity.commentCount,
+                commentsTruncated: activity.commentsTruncated,
+                ...(activity.reviewThreadsTruncated === undefined
+                  ? {}
+                  : { reviewThreadsTruncated: activity.reviewThreadsTruncated }),
+                reviewThreads: activity.reviewThreads,
+                commits: activity.commits,
+                ...(activity.reactions === undefined ? {} : { reactions: activity.reactions }),
+              }),
+            ),
           ),
       ),
     );
@@ -2329,22 +2340,23 @@ export const make = Effect.gen(function* () {
           );
         }
         return viewerPermissionsOf(project, input, "setLabels").pipe(
-          Effect.flatMap((viewer): Effect.Effect<void, PullRequestError> =>
-            viewer.labels === false
-              ? Effect.fail(
-                  new PullRequestOperationError({
-                    operation: "setLabels",
-                    detail: LABEL_CHANGE_REFUSAL,
-                  }),
-                )
-              : change({
-                  cwd: project.project.workspaceRoot,
-                  repository: project.repository,
-                  host: project.host,
-                  number: input.number,
-                  labels: input.labels,
-                  applied: input.applied,
-                }).pipe(Effect.mapError(toPullRequestError("setLabels"))),
+          Effect.flatMap(
+            (viewer): Effect.Effect<void, PullRequestError> =>
+              viewer.labels === false
+                ? Effect.fail(
+                    new PullRequestOperationError({
+                      operation: "setLabels",
+                      detail: LABEL_CHANGE_REFUSAL,
+                    }),
+                  )
+                : change({
+                    cwd: project.project.workspaceRoot,
+                    repository: project.repository,
+                    host: project.host,
+                    number: input.number,
+                    labels: input.labels,
+                    applied: input.applied,
+                  }).pipe(Effect.mapError(toPullRequestError("setLabels"))),
           ),
         );
       }),
@@ -2891,10 +2903,12 @@ export const make = Effect.gen(function* () {
       }
       detailStates.set(scope, {
         state: next.state,
+        isDraft: next.isDraft,
         updatedAt: next.updatedAt,
         observedAt: next.observedAt,
       });
-      return current?.state !== next.state && ref.host !== undefined
+      return (current?.state !== next.state || current?.isDraft !== next.isDraft) &&
+        ref.host !== undefined
         ? PubSub.publish(stateChanges, {
             host: ref.host,
             repository: ref.repository,
@@ -2906,22 +2920,34 @@ export const make = Effect.gen(function* () {
   // must never outrank a reading this environment made itself.
   const reportedStates = new Map<
     string,
-    { readonly state: PullRequestState; readonly atMs: number }
+    {
+      readonly state: PullRequestState;
+      readonly isDraft: boolean | undefined;
+      readonly atMs: number;
+    }
   >();
-  const reportState: PullRequestService["Service"]["reportState"] = ({ reference, state }) =>
+  const reportState: PullRequestService["Service"]["reportState"] = ({
+    reference,
+    state,
+    isDraft,
+  }) =>
     Effect.all([canonicalRef(reference), Clock.currentTimeMillis]).pipe(
       Effect.flatMap(([ref, nowMs]) =>
         Effect.suspend(() => {
           const scope = refScope(ref);
           const reported = reportedStates.get(scope);
-          if (reported?.state === state && nowMs - reported.atMs < REPORTED_STATE_DEDUPE_MS)
+          if (
+            reported?.state === state &&
+            reported.isDraft === isDraft &&
+            nowMs - reported.atMs < REPORTED_STATE_DEDUPE_MS
+          )
             return Effect.void;
           reportedStates.delete(scope);
           if (reportedStates.size >= REF_EPOCH_CAPACITY) {
             const oldest = reportedStates.keys().next().value;
             if (oldest !== undefined) reportedStates.delete(oldest);
           }
-          reportedStates.set(scope, { state, atMs: nowMs });
+          reportedStates.set(scope, { state, isDraft, atMs: nowMs });
           return ref.host === undefined
             ? Effect.void
             : PubSub.publish(stateChanges, {

@@ -146,10 +146,11 @@ export function makeAntigravityAcpAdapterFlavor(
       };
     },
     Effect.provideService(Crypto.Crypto, options.crypto),
-    Effect.mapError((cause): EffectAcpErrors.AcpError =>
-      cause._tag === "ProviderSetupError"
-        ? new EffectAcpErrors.AcpTransportError({ detail: cause.detail, cause })
-        : cause,
+    Effect.mapError(
+      (cause): EffectAcpErrors.AcpError =>
+        cause._tag === "ProviderSetupError"
+          ? new EffectAcpErrors.AcpTransportError({ detail: cause.detail, cause })
+          : cause,
     ),
   );
 
@@ -198,16 +199,7 @@ export function makeAntigravityAcpAdapterFlavor(
       const question = extractAntigravityUserInputQuestion(request);
       if (question === undefined) return undefined;
       return {
-        question: {
-          id: question.id,
-          header: question.header,
-          question: question.question,
-          options: question.options.map((option) => ({
-            label: option.label,
-            description: option.description,
-          })),
-          multiSelect: false,
-        },
+        question,
         respond: (answers) => makeAntigravityUserInputResponse(request, answers),
       };
     },

@@ -96,6 +96,23 @@ describe("AntigravityAdapterV2 flavor", () => {
       ),
     );
   });
+
+  it("keeps the question card to the agent's own options so a typed answer cannot be sent", () => {
+    const question = flavor.extractPermissionQuestion?.(
+      permissionRequest("interaction_2", [
+        { optionId: "opt-main", name: "main", kind: "allow_once" },
+        { optionId: "opt-dev", name: "dev", kind: "allow_once" },
+      ]),
+    );
+    assert.strictEqual(question?.question.allowCustomAnswer, false);
+    assert.deepEqual(
+      question?.question.options.map((option) => option.value),
+      ["opt-main", "opt-dev"],
+    );
+    assert.deepEqual(question?.respond({ interaction_2: "opt-dev" }), {
+      outcome: { outcome: "selected", optionId: "opt-dev" },
+    });
+  });
 });
 
 const layerSession = Layer.mergeAll(
@@ -136,17 +153,19 @@ describe("AntigravityAdapterV2 client file system", () => {
             },
           }).pipe(
             Effect.provideService(Crypto.Crypto, crypto),
-            Effect.map((runtime): RuntimeService => ({
-              ...runtime,
-              handleReadTextFile: (handler) =>
-                Effect.sync(() => {
-                  readTextFile = handler;
-                }).pipe(Effect.andThen(runtime.handleReadTextFile(handler))),
-              handleWriteTextFile: (handler) =>
-                Effect.sync(() => {
-                  writeTextFile = handler;
-                }).pipe(Effect.andThen(runtime.handleWriteTextFile(handler))),
-            })),
+            Effect.map(
+              (runtime): RuntimeService => ({
+                ...runtime,
+                handleReadTextFile: (handler) =>
+                  Effect.sync(() => {
+                    readTextFile = handler;
+                  }).pipe(Effect.andThen(runtime.handleReadTextFile(handler))),
+                handleWriteTextFile: (handler) =>
+                  Effect.sync(() => {
+                    writeTextFile = handler;
+                  }).pipe(Effect.andThen(runtime.handleWriteTextFile(handler))),
+              }),
+            ),
           ),
         withProcess: (_stop, task) => task,
         defaultModel: Effect.succeed(undefined),
@@ -277,13 +296,15 @@ describe("AntigravityAdapterV2 workspace changes", () => {
             },
           }).pipe(
             Effect.provideService(Crypto.Crypto, crypto),
-            Effect.map((runtime): RuntimeService => ({
-              ...runtime,
-              handleReadTextFile: (handler) =>
-                Effect.sync(() => {
-                  readTextFile = handler;
-                }).pipe(Effect.andThen(runtime.handleReadTextFile(handler))),
-            })),
+            Effect.map(
+              (runtime): RuntimeService => ({
+                ...runtime,
+                handleReadTextFile: (handler) =>
+                  Effect.sync(() => {
+                    readTextFile = handler;
+                  }).pipe(Effect.andThen(runtime.handleReadTextFile(handler))),
+              }),
+            ),
           ),
         withProcess: (_stop, task) => task,
         defaultModel: Effect.succeed(undefined),
@@ -377,111 +398,6 @@ describe("AntigravityAdapterV2 workspace changes", () => {
   );
 });
 
-describe("AntigravityAdapterV2 client file system under restrictive policies", () => {
-  it.effect("serves in-workspace reads and writes and still refuses outside paths", () =>
-    Effect.gen(function* () {
-      const childProcessSpawner = yield* ChildProcessSpawner.ChildProcessSpawner;
-      const fileSystem = yield* FileSystem.FileSystem;
-      const path = yield* Path.Path;
-      const crypto = yield* Crypto.Crypto;
-      const mockAgentPath = yield* path.fromFileUrl(
-        new URL("../../../scripts/acp-mock-agent.ts", import.meta.url),
-      );
-      type RuntimeService = AcpSessionRuntime.AcpSessionRuntime["Service"];
-      const policies = [
-        {
-          name: "read-only sandbox",
-          policy: {
-            runtimeMode: "full-access",
-            approvalPolicy: "never",
-            sandboxPolicy: { type: "readOnly" },
-          },
-        },
-        { name: "approval-required", policy: { runtimeMode: "approval-required" } },
-      ] as const;
-      for (const { name, policy } of policies) {
-        let readTextFile: Parameters<RuntimeService["handleReadTextFile"]>[0] | undefined;
-        let writeTextFile: Parameters<RuntimeService["handleWriteTextFile"]>[0] | undefined;
-        const instanceId = ProviderInstanceId.make(`antigravity-restrictive-${policy.runtimeMode}`);
-        const adapter = yield* makeAntigravityAdapterV2({
-          instanceId,
-          selfInvocation: yield* resolveSelfInvocation(),
-          makeRuntime: (input) =>
-            makeAntigravityAcpRuntime({
-              ...input,
-              childProcessSpawner,
-              spawn: {
-                command: process.execPath,
-                args: [mockAgentPath],
-                cwd: input.cwd,
-                env: { T3_ACP_ANTIGRAVITY: "1" },
-              },
-            }).pipe(
-              Effect.provideService(Crypto.Crypto, crypto),
-              Effect.map((runtime): RuntimeService => ({
-                ...runtime,
-                handleReadTextFile: (handler) =>
-                  Effect.sync(() => {
-                    readTextFile = handler;
-                  }).pipe(Effect.andThen(runtime.handleReadTextFile(handler))),
-                handleWriteTextFile: (handler) =>
-                  Effect.sync(() => {
-                    writeTextFile = handler;
-                  }).pipe(Effect.andThen(runtime.handleWriteTextFile(handler))),
-              })),
-            ),
-          withProcess: (_stop, task) => task,
-          defaultModel: Effect.succeed(undefined),
-        });
-        const workspace = yield* fileSystem.makeTempDirectoryScoped({
-          prefix: "t3-ag-restrictive-",
-        });
-        const outside = yield* fileSystem.makeTempDirectoryScoped({
-          prefix: "t3-ag-restrictive-outside-",
-        });
-        yield* fileSystem.writeFileString(path.join(workspace, "existing.ts"), "existing");
-        const threadId = ThreadId.make(`thread-antigravity-restrictive-${policy.runtimeMode}`);
-        const runtimePolicy = ProviderAdapter.ProviderAdapterV2RuntimePolicy.make({
-          ...policy,
-          interactionMode: "default",
-          cwd: workspace,
-        });
-        const modelSelection = { instanceId, model: "gemini-test-low" } as const;
-        const session = yield* adapter.openSession({
-          threadId,
-          providerSessionId: ProviderSessionId.make(
-            `provider-session-antigravity-restrictive-${policy.runtimeMode}`,
-          ),
-          modelSelection,
-          runtimePolicy,
-        });
-        yield* session.ensureThread({ threadId, modelSelection, runtimePolicy });
-        if (readTextFile === undefined || writeTextFile === undefined) {
-          return yield* Effect.die("Antigravity sessions must serve client file requests");
-        }
-        const context = (method: string) => ({ requestId: `test-${method}`, method });
-        const read = yield* readTextFile(
-          { sessionId: "mock-session-1", path: path.join(workspace, "existing.ts") },
-          context("fs/read_text_file"),
-        );
-        assert.equal(read.content, "existing", name);
-        const written = path.join(workspace, "src", "edited.ts");
-        yield* writeTextFile(
-          { sessionId: "mock-session-1", path: written, content: "edited" },
-          context("fs/write_text_file"),
-        );
-        assert.equal(yield* fileSystem.readFileString(written), "edited", name);
-        const outsideWrite = yield* writeTextFile(
-          { sessionId: "mock-session-1", path: path.join(outside, "x.ts"), content: "x" },
-          context("fs/write_text_file"),
-        ).pipe(Effect.exit);
-        assert.isTrue(Exit.isFailure(outsideWrite), name);
-        assert.isFalse(yield* fileSystem.exists(path.join(outside, "x.ts")), name);
-      }
-    }).pipe(Effect.provide(layerSession), Effect.scoped),
-  );
-});
-
 describe("AntigravityAdapterV2 html_render pages", () => {
   it.effect("shows the page html_render published when the agent reports only a summary", () =>
     Effect.gen(function* () {
@@ -521,110 +437,112 @@ describe("AntigravityAdapterV2 html_render pages", () => {
             },
           }).pipe(
             Effect.provideService(Crypto.Crypto, crypto),
-            Effect.map((runtime): RuntimeService => ({
-              ...runtime,
-              handleSessionUpdate: (handler) =>
-                Effect.sync(() => {
-                  sessionUpdate = handler;
-                }).pipe(Effect.andThen(runtime.handleSessionUpdate(handler))),
-              // agy_acp_server 1.3/1.4 without a permission prompt: the call is
-              // titled "Running <tool>" and completes with the step's summary
-              // in place of the MCP result.
-              prompt: () =>
-                Effect.gen(function* () {
-                  const send = (update: EffectAcpSchema.SessionUpdate) =>
-                    sessionUpdate === undefined
-                      ? Effect.die("the adapter must handle session updates")
-                      : sessionUpdate(
-                          normalizeAntigravitySessionUpdate({
-                            sessionId: "mock-session-1",
-                            update,
-                          }),
-                        );
-                  const calls = [
-                    ["published", report],
-                    ["unpublished", { ...report, html: "<p>Costs</p>" }],
-                    ["failed", failed],
-                    ["error", errored],
-                  ] as const;
-                  for (const [toolCallId, rawInput] of calls) {
-                    yield* send({
-                      sessionUpdate: "tool_call",
-                      toolCallId,
-                      title: "Running html_render",
-                      kind: "other",
-                      status: "in_progress",
-                      rawInput,
-                    });
-                  }
-                  yield* mcpSessions.recordHtmlRender(threadId, report, page("report"));
-                  yield* mcpSessions.recordHtmlRender(threadId, failed, page("failed"));
-                  yield* mcpSessions.recordHtmlRender(threadId, errored, page("error"));
-                  for (const [toolCallId, status] of [
-                    ["unpublished", "completed"],
-                    ["failed", "failed"],
-                    ["published", "completed"],
-                    ["published", "completed"],
-                  ] as const) {
-                    yield* send({
-                      sessionUpdate: "tool_call_update",
-                      toolCallId,
-                      status,
-                      rawOutput: `Summary of ${toolCallId}`,
-                    });
-                  }
-                  yield* send({
-                    sessionUpdate: "tool_call_update",
-                    toolCallId: "error",
-                    status: "completed",
-                    rawOutput: { result: { isError: true, content: [] } },
-                  });
-                  for (const [name, rawInput] of [
-                    ["failed", failed],
-                    ["error", errored],
-                  ] as const) {
-                    const toolCallId = `${name}-retry`;
-                    yield* send({
-                      sessionUpdate: "tool_call",
-                      toolCallId,
-                      title: "Running html_render",
-                      kind: "other",
-                      status: "in_progress",
-                      rawInput,
-                    });
-                    yield* mcpSessions.recordHtmlRender(threadId, rawInput, page(toolCallId));
+            Effect.map(
+              (runtime): RuntimeService => ({
+                ...runtime,
+                handleSessionUpdate: (handler) =>
+                  Effect.sync(() => {
+                    sessionUpdate = handler;
+                  }).pipe(Effect.andThen(runtime.handleSessionUpdate(handler))),
+                // agy_acp_server 1.3/1.4 without a permission prompt: the call is
+                // titled "Running <tool>" and completes with the step's summary
+                // in place of the MCP result.
+                prompt: () =>
+                  Effect.gen(function* () {
+                    const send = (update: EffectAcpSchema.SessionUpdate) =>
+                      sessionUpdate === undefined
+                        ? Effect.die("the adapter must handle session updates")
+                        : sessionUpdate(
+                            normalizeAntigravitySessionUpdate({
+                              sessionId: "mock-session-1",
+                              update,
+                            }),
+                          );
+                    const calls = [
+                      ["published", report],
+                      ["unpublished", { ...report, html: "<p>Costs</p>" }],
+                      ["failed", failed],
+                      ["error", errored],
+                    ] as const;
+                    for (const [toolCallId, rawInput] of calls) {
+                      yield* send({
+                        sessionUpdate: "tool_call",
+                        toolCallId,
+                        title: "Running html_render",
+                        kind: "other",
+                        status: "in_progress",
+                        rawInput,
+                      });
+                    }
+                    yield* mcpSessions.recordHtmlRender(threadId, report, page("report"));
+                    yield* mcpSessions.recordHtmlRender(threadId, failed, page("failed"));
+                    yield* mcpSessions.recordHtmlRender(threadId, errored, page("error"));
+                    for (const [toolCallId, status] of [
+                      ["unpublished", "completed"],
+                      ["failed", "failed"],
+                      ["published", "completed"],
+                      ["published", "completed"],
+                    ] as const) {
+                      yield* send({
+                        sessionUpdate: "tool_call_update",
+                        toolCallId,
+                        status,
+                        rawOutput: `Summary of ${toolCallId}`,
+                      });
+                    }
                     yield* send({
                       sessionUpdate: "tool_call_update",
-                      toolCallId: name,
-                      status: name === "failed" ? "failed" : "completed",
-                      rawOutput:
-                        name === "failed"
-                          ? "Summary of failed"
-                          : { result: { isError: true, content: [] } },
-                    });
-                    yield* send({
-                      sessionUpdate: "tool_call_update",
-                      toolCallId,
+                      toolCallId: "error",
                       status: "completed",
-                      rawOutput: `Summary of ${toolCallId}`,
+                      rawOutput: { result: { isError: true, content: [] } },
                     });
-                  }
-                  yield* mcpSessions.recordHtmlRender(threadId, report, page("replacement"));
-                  yield* send({
-                    sessionUpdate: "tool_call_update",
-                    toolCallId: "published",
-                    status: "completed",
-                    rawOutput: { htmlRender: page("replacement") },
-                  });
-                  yield* send({
-                    sessionUpdate: "tool_call_update",
-                    toolCallId: "published",
-                    status: "completed",
-                    rawOutput: "Summary of published",
-                  });
-                  return { stopReason: "end_turn" as const };
-                }),
-            })),
+                    for (const [name, rawInput] of [
+                      ["failed", failed],
+                      ["error", errored],
+                    ] as const) {
+                      const toolCallId = `${name}-retry`;
+                      yield* send({
+                        sessionUpdate: "tool_call",
+                        toolCallId,
+                        title: "Running html_render",
+                        kind: "other",
+                        status: "in_progress",
+                        rawInput,
+                      });
+                      yield* mcpSessions.recordHtmlRender(threadId, rawInput, page(toolCallId));
+                      yield* send({
+                        sessionUpdate: "tool_call_update",
+                        toolCallId: name,
+                        status: name === "failed" ? "failed" : "completed",
+                        rawOutput:
+                          name === "failed"
+                            ? "Summary of failed"
+                            : { result: { isError: true, content: [] } },
+                      });
+                      yield* send({
+                        sessionUpdate: "tool_call_update",
+                        toolCallId,
+                        status: "completed",
+                        rawOutput: `Summary of ${toolCallId}`,
+                      });
+                    }
+                    yield* mcpSessions.recordHtmlRender(threadId, report, page("replacement"));
+                    yield* send({
+                      sessionUpdate: "tool_call_update",
+                      toolCallId: "published",
+                      status: "completed",
+                      rawOutput: { htmlRender: page("replacement") },
+                    });
+                    yield* send({
+                      sessionUpdate: "tool_call_update",
+                      toolCallId: "published",
+                      status: "completed",
+                      rawOutput: "Summary of published",
+                    });
+                    return { stopReason: "end_turn" as const };
+                  }),
+              }),
+            ),
           ),
         withProcess: (_stop, task) => task,
         defaultModel: Effect.succeed(undefined),

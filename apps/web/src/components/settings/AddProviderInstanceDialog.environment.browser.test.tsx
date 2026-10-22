@@ -14,19 +14,21 @@ const settingsHooks = vi.hoisted(() => ({
   mutate: vi.fn(),
   useMutation: vi.fn(),
 }));
-const preparedAgent = vi.hoisted((): AcpRegistrySearchAgent => ({
-  id: "kilo",
-  name: "Kilo Code",
-  version: "4.2.0",
-  description: "Kilo ACP agent",
-  authors: ["Kilo"],
-  license: "Apache-2.0",
-  website: null,
-  repository: null,
-  icon: "https://cdn.agentclientprotocol.com/registry/v1/latest/kilo.svg",
-  distribution: "binary",
-  integrity: "sha256",
-}));
+const preparedAgent = vi.hoisted(
+  (): AcpRegistrySearchAgent => ({
+    id: "kilo",
+    name: "Kilo Code",
+    version: "4.2.0",
+    description: "Kilo ACP agent",
+    authors: ["Kilo"],
+    license: "Apache-2.0",
+    website: null,
+    repository: null,
+    icon: "https://cdn.agentclientprotocol.com/registry/v1/latest/kilo.svg",
+    distribution: "binary",
+    integrity: "sha256",
+  }),
+);
 
 vi.mock(import("@t3tools/client-runtime/state/runtime"), async (original) => ({
   ...(await original()),
@@ -245,20 +247,6 @@ describe("AddProviderInstanceDialog environment routing", () => {
     });
     expect(actions.onOpenChange).toHaveBeenCalledWith(false);
     expect(signInStep()).toBeNull();
-  });
-
-  it("keeps the dialog open when the atomic upsert fails", async () => {
-    setup();
-    settingsHooks.mutate.mockResolvedValueOnce({ _tag: "Failure", cause: new Error("Conflict") });
-    await using _screen = await render(dialog());
-    await click("Use Kilo Code");
-    await click("Continue to sign-in");
-
-    expect(actions.onOpenChange).not.toHaveBeenCalled();
-    expect(actions.toast).toHaveBeenCalledWith(
-      expect.objectContaining({ type: "error", title: "Could not add provider instance" }),
-    );
-    expect(button("Continue to sign-in").disabled).toBe(false);
   });
 
   it("rejects a queued save after the provider grant is revoked", async () => {

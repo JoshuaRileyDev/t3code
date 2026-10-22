@@ -77,9 +77,7 @@ export interface IssuedBearerSession {
 const MCP_CLIENT_SUBJECT = "mcp-client";
 const MCP_CLIENT_SESSION_TTL = Duration.days(30);
 
-export const mcpClientScopes = (
-  access: AuthMcpClientAccess,
-): ReadonlyArray<AuthEnvironmentScope> =>
+export const mcpClientScopes = (access: AuthMcpClientAccess): ReadonlyArray<AuthEnvironmentScope> =>
   access === "read-only"
     ? [AuthOrchestrationReadScope]
     : access === "full-access"
@@ -558,7 +556,11 @@ export class EnvironmentAuth extends Context.Service<
       readonly access: AuthMcpClientAccess;
       readonly client: AuthClientMetadata;
     }) => Effect.Effect<
-      { readonly token: string; readonly expiresAt: DateTime.DateTime },
+      {
+        readonly sessionId: AuthSessionId;
+        readonly token: string;
+        readonly expiresAt: DateTime.DateTime;
+      },
       ServerAuthInternalError
     >;
     /**
@@ -1179,11 +1181,13 @@ export const make = Effect.gen(function* () {
   const listClientSessions: EnvironmentAuth["Service"]["listClientSessions"] = (currentSessionId) =>
     listSessions().pipe(
       Effect.map((clientSessions) =>
-        clientSessions.map((clientSession): AuthClientSession => ({
-          ...clientSession,
-          ...authScopeResponse(clientSession.scopes),
-          current: clientSession.sessionId === currentSessionId,
-        })),
+        clientSessions.map(
+          (clientSession): AuthClientSession => ({
+            ...clientSession,
+            ...authScopeResponse(clientSession.scopes),
+            current: clientSession.sessionId === currentSessionId,
+          }),
+        ),
       ),
       Effect.withSpan("EnvironmentAuth.listClientSessions"),
     );
@@ -1292,7 +1296,11 @@ export const make = Effect.gen(function* () {
         client: { ...input.client, label: input.label, deviceType: "bot" },
       })
       .pipe(
-        Effect.map((issued) => ({ token: issued.token, expiresAt: issued.expiresAt })),
+        Effect.map((issued) => ({
+          sessionId: issued.sessionId,
+          token: issued.token,
+          expiresAt: issued.expiresAt,
+        })),
         Effect.mapError((cause) => new ServerAuthSessionTokenIssueError({ cause })),
         Effect.withSpan("EnvironmentAuth.issueMcpClientSession"),
       );
