@@ -130,6 +130,7 @@ export const make = Effect.gen(function* () {
           limit: input.limit,
           query: input.query,
           cursor: input.cursor,
+          filters: input.filters,
         })
         .pipe(
           Effect.mapError(fail("listChangeRequests")),
@@ -151,22 +152,24 @@ export const make = Effect.gen(function* () {
         { concurrency: 2 },
       ).pipe(
         Effect.mapError(fail("getChangeRequest")),
-        Effect.map(([mergeRequest, mergeCapabilities]): ProviderChangeRequestDetail => ({
-          ...mergeRequest,
-          mergeCapabilities,
-          viewerPermissions: gitLabViewerPermissions(mergeRequest),
-          // A GitLab too old to count the divergence says nothing here rather than "up to
-          // date": the banner is worth missing, and a wrong all-clear is not worth showing.
-          baseComparison:
-            mergeRequest.divergedCommits === undefined
-              ? "unknown"
-              : mergeRequest.divergedCommits > 0
-                ? "behind"
-                : "up-to-date",
-          ...(mergeRequest.divergedCommits === undefined
-            ? {}
-            : { behindBy: mergeRequest.divergedCommits }),
-        })),
+        Effect.map(
+          ([mergeRequest, mergeCapabilities]): ProviderChangeRequestDetail => ({
+            ...mergeRequest,
+            mergeCapabilities,
+            viewerPermissions: gitLabViewerPermissions(mergeRequest),
+            // A GitLab too old to count the divergence says nothing here rather than "up to
+            // date": the banner is worth missing, and a wrong all-clear is not worth showing.
+            baseComparison:
+              mergeRequest.divergedCommits === undefined
+                ? "unknown"
+                : mergeRequest.divergedCommits > 0
+                  ? "behind"
+                  : "up-to-date",
+            ...(mergeRequest.divergedCommits === undefined
+              ? {}
+              : { behindBy: mergeRequest.divergedCommits }),
+          }),
+        ),
       ),
 
     getChangeRequestActivity: (input) =>
@@ -183,23 +186,25 @@ export const make = Effect.gen(function* () {
         { concurrency: 4 },
       ).pipe(
         Effect.mapError(fail("getChangeRequestActivity")),
-        Effect.map(([notes, commits, discussions, awards]): ProviderChangeRequestActivity => ({
-          reactions: awards.reactions,
-          comments: notes.comments.map((comment) => ({
-            ...comment,
-            reactions: awards.reactionsByNoteId.get(comment.id) ?? [],
-          })),
-          commentCount: notes.comments.length,
-          commentsTruncated: notes.truncated || discussions.truncated,
-          reviewThreads: discussions.threads.map((thread) => ({
-            ...thread,
-            comments: thread.comments.map((comment) => ({
+        Effect.map(
+          ([notes, commits, discussions, awards]): ProviderChangeRequestActivity => ({
+            reactions: awards.reactions,
+            comments: notes.comments.map((comment) => ({
               ...comment,
               reactions: awards.reactionsByNoteId.get(comment.id) ?? [],
             })),
-          })),
-          commits,
-        })),
+            commentCount: notes.comments.length,
+            commentsTruncated: notes.truncated || discussions.truncated,
+            reviewThreads: discussions.threads.map((thread) => ({
+              ...thread,
+              comments: thread.comments.map((comment) => ({
+                ...comment,
+                reactions: awards.reactionsByNoteId.get(comment.id) ?? [],
+              })),
+            })),
+            commits,
+          }),
+        ),
       ),
 
     getViewerPermissions: (input) =>
@@ -230,6 +235,16 @@ export const make = Effect.gen(function* () {
           number: input.number,
         })
         .pipe(Effect.mapError(fail("listReviewerCandidates"))),
+
+    listRepositoryLabels: (input) =>
+      cli
+        .listProjectLabels({ cwd: input.cwd, repository: input.repository, search: input.query })
+        .pipe(Effect.mapError(fail("listRepositoryLabels"))),
+
+    searchRepositoryAuthors: (input) =>
+      cli
+        .listProjectUsers({ cwd: input.cwd, repository: input.repository, search: input.query })
+        .pipe(Effect.mapError(fail("searchRepositoryAuthors"))),
 
     setReviewerRequest: (input) =>
       cli

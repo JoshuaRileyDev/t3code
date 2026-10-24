@@ -16,27 +16,34 @@ export function appendPendingThreadMessages(
     feed.flatMap((entry) => (entry.type === "message" ? [entry.message.id] : [])),
   );
   return [
-    ...presentedFeed,
+    ...presentedFeed.map((entry): PendingThreadFeedEntry => {
+      const pendingMessage = queuedMessages.find(
+        (message) => message.creation !== undefined && message.messageId === entry.id,
+      );
+      return pendingMessage ? { ...entry, pendingMessage, acknowledged: false } : entry;
+    }),
     ...queuedMessages
       .filter((message) => !deliveredIds.has(message.messageId))
-      .map((pendingMessage): PendingThreadFeedEntry => ({
-        type: "message",
-        id: pendingMessage.messageId,
-        createdAt: pendingMessage.createdAt,
-        pendingMessage,
-        message: {
+      .map(
+        (pendingMessage): PendingThreadFeedEntry => ({
+          type: "message",
           id: pendingMessage.messageId,
-          role: "user",
-          text: pendingMessage.text,
-          attachments: [],
-          context: pendingMessage.context,
           createdAt: pendingMessage.createdAt,
-          updatedAt: pendingMessage.createdAt,
-          runId: null,
-          streaming: false,
-          visibility: "local",
-          sourceThreadId: pendingMessage.threadId,
-        },
-      })),
+          pendingMessage,
+          message: {
+            id: pendingMessage.messageId,
+            role: "user",
+            text: pendingMessage.text,
+            attachments: [],
+            context: pendingMessage.context,
+            createdAt: pendingMessage.createdAt,
+            updatedAt: pendingMessage.createdAt,
+            runId: null,
+            streaming: false,
+            visibility: "local",
+            sourceThreadId: pendingMessage.threadId,
+          },
+        }),
+      ),
   ];
 }

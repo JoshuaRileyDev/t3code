@@ -1,4 +1,4 @@
-import { SourceControlProviderKind } from "@t3tools/contracts";
+import { resolvePullRequestAuthorFilter, SourceControlProviderKind } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as Semaphore from "effect/Semaphore";
 import type { PullRequestCapabilities, PullRequestViewerPermissions } from "@t3tools/contracts";
@@ -223,13 +223,15 @@ export const make = Effect.gen(function* () {
       ],
       { concurrency: 2 },
     ).pipe(
-      Effect.map(([oldItem, newItem]): AzureDevOpsFileTexts => ({
-        oldContents: oldItem.contents,
-        newContents: newItem.contents,
-        // Azure hands a file it calls binary over in an encoding of its own, so its own word on
-        // that is taken rather than looked for in bytes it may never have sent verbatim.
-        binary: oldItem.isBinary || newItem.isBinary,
-      })),
+      Effect.map(
+        ([oldItem, newItem]): AzureDevOpsFileTexts => ({
+          oldContents: oldItem.contents,
+          newContents: newItem.contents,
+          // Azure hands a file it calls binary over in an encoding of its own, so its own word on
+          // that is taken rather than looked for in bytes it may never have sent verbatim.
+          binary: oldItem.isBinary || newItem.isBinary,
+        }),
+      ),
     );
 
   /**
@@ -275,6 +277,10 @@ export const make = Effect.gen(function* () {
           viewer: input.viewer,
           limit: input.limit,
           cursor: input.cursor,
+          author:
+            input.filters?.author === undefined
+              ? undefined
+              : resolvePullRequestAuthorFilter(input.filters.author, input.viewer),
         })
         .pipe(
           Effect.mapError(fail("listChangeRequests")),
@@ -291,20 +297,22 @@ export const make = Effect.gen(function* () {
     getChangeRequestSummary: (input) =>
       cli.getPullRequest({ cwd: input.cwd, number: input.number }).pipe(
         Effect.mapError(fail("getChangeRequestSummary")),
-        Effect.map((pullRequest): ProviderChangeRequestSummary => ({
-          number: pullRequest.number,
-          title: pullRequest.title,
-          url: pullRequest.url,
-          author: pullRequest.author,
-          headBranch: pullRequest.headBranch,
-          baseBranch: pullRequest.baseBranch,
-          state: pullRequest.state,
-          isDraft: pullRequest.isDraft,
-          mergeability: pullRequest.mergeability,
-          closedAt: pullRequest.state === "closed" ? pullRequest.closedAt : null,
-          mergedAt: pullRequest.state === "merged" ? pullRequest.closedAt : null,
-          updatedAt: pullRequest.updatedAt,
-        })),
+        Effect.map(
+          (pullRequest): ProviderChangeRequestSummary => ({
+            number: pullRequest.number,
+            title: pullRequest.title,
+            url: pullRequest.url,
+            author: pullRequest.author,
+            headBranch: pullRequest.headBranch,
+            baseBranch: pullRequest.baseBranch,
+            state: pullRequest.state,
+            isDraft: pullRequest.isDraft,
+            mergeability: pullRequest.mergeability,
+            closedAt: pullRequest.state === "closed" ? pullRequest.closedAt : null,
+            mergedAt: pullRequest.state === "merged" ? pullRequest.closedAt : null,
+            updatedAt: pullRequest.updatedAt,
+          }),
+        ),
       ),
 
     getChangeRequest: Effect.fn("AzureDevOpsPullRequestProvider.getChangeRequest")(
@@ -369,13 +377,15 @@ export const make = Effect.gen(function* () {
                   Effect.orElseSucceed(() => ({ comments: [], truncated: true })),
                 )
           ).pipe(
-            Effect.map((conversation): ProviderChangeRequestActivity => ({
-              comments: conversation.comments,
-              commentCount: conversation.comments.length,
-              commentsTruncated: conversation.truncated,
-              reviewThreads: [],
-              commits: [],
-            })),
+            Effect.map(
+              (conversation): ProviderChangeRequestActivity => ({
+                comments: conversation.comments,
+                commentCount: conversation.comments.length,
+                commentsTruncated: conversation.truncated,
+                reviewThreads: [],
+                commits: [],
+              }),
+            ),
           ),
         ),
       ),

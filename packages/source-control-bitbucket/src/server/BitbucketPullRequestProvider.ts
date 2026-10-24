@@ -1,4 +1,4 @@
-import { SourceControlProviderKind } from "@t3tools/contracts";
+import { resolvePullRequestAuthorFilter, SourceControlProviderKind } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import type { PullRequestCapabilities, PullRequestViewerPermissions } from "@t3tools/contracts";
 
@@ -60,6 +60,9 @@ export function bitbucketProviderFailure(
 ): PullRequestProviderFailure {
   if (error._tag === "BitbucketResponseError" && error.status === 401) {
     return { reason: "unauthenticated" };
+  }
+  if (error._tag === "SourceControlRateLimitPausedError") {
+    return { reason: "rate-limited", retryAt: error.retryAt };
   }
   if (
     (error._tag === "BitbucketResponseError" || error._tag === "BitbucketResponseBodyReadError") &&
@@ -155,6 +158,11 @@ export const make = Effect.gen(function* () {
           limit: input.limit,
           query: input.query,
           cursor: input.cursor,
+          author:
+            input.filters?.author === undefined
+              ? undefined
+              : resolvePullRequestAuthorFilter(input.filters.author, input.viewer),
+          draft: input.filters?.draft === undefined ? undefined : input.filters.draft === "only",
         })
         .pipe(
           Effect.mapError(fail("listChangeRequests")),
@@ -222,15 +230,17 @@ export const make = Effect.gen(function* () {
         { concurrency: 3 },
       ).pipe(
         Effect.mapError(fail("getChangeRequestActivity")),
-        Effect.map(([pullRequest, comments, commits]): ProviderChangeRequestActivity => ({
-          comments: [...comments.comments, ...pullRequest.reviews].toSorted((left, right) =>
-            left.createdAt.localeCompare(right.createdAt),
-          ),
-          commentCount: comments.comments.length + pullRequest.reviews.length,
-          commentsTruncated: comments.truncated,
-          reviewThreads: comments.threads,
-          commits,
-        })),
+        Effect.map(
+          ([pullRequest, comments, commits]): ProviderChangeRequestActivity => ({
+            comments: [...comments.comments, ...pullRequest.reviews].toSorted((left, right) =>
+              left.createdAt.localeCompare(right.createdAt),
+            ),
+            commentCount: comments.comments.length + pullRequest.reviews.length,
+            commentsTruncated: comments.truncated,
+            reviewThreads: comments.threads,
+            commits,
+          }),
+        ),
       );
     },
 
