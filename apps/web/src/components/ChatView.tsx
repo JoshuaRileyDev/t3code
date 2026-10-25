@@ -1,5 +1,6 @@
 import { formatFilePathForClipboard } from "@t3tools/client-runtime/media-actions";
 import { resolvePathLinkTarget } from "@t3tools/shared/fileLinks";
+import { sourceControlClients } from "@t3tools/client-runtime/source-control-clients";
 import { ScrollToEndButton, WorkspaceFileDropOverlay } from "./chat/TimelineOverlays";
 import { usePasteToFocusComposer } from "./chat/usePasteToFocusComposer";
 import { announcedRun, isDetailBehindShell } from "./chat/threadActivityAnnouncement";
@@ -166,9 +167,8 @@ import {
   usageLimitRunPresentedAsLatest,
 } from "@t3tools/shared/orchestrationV2ThreadError";
 import { resolveProjectSettings } from "@t3tools/shared/projectSettings";
-import { sourceControlRepositorySelector } from "@t3tools/shared/sourceControl";
 import { truncate } from "@t3tools/shared/String";
-import { resolveThreadReferenceCopyTarget } from "@t3tools/shared/threadReference";
+import { resolveThreadReferenceCopyTarget } from "@t3tools/client-runtime/thread-reference";
 import { resolveTerminalSessionLabel } from "@t3tools/shared/terminalLabels";
 import { Debouncer } from "@tanstack/react-pacer";
 import { useAtomValue } from "@effect/atom-react";
@@ -286,6 +286,7 @@ import {
 import { threadPullRequestPanelTarget } from "./pullRequest/pullRequestDetail.logic";
 import { RightPanelTabs } from "./RightPanelTabs";
 import { LinkPullRequestDialogHost } from "./pullRequest/LinkPullRequestDialog";
+import { GuestPendingMessages } from "./chat/GuestShareControls";
 import { useDeviceState } from "~/state/device";
 import { BranchToolbar, type BranchToolbarHandle } from "./BranchToolbar";
 import { makeWorkspaceFileDropHandlers } from "./chat/workspaceFileDrop";
@@ -394,7 +395,7 @@ import {
   primaryServerKeybindingsAtom,
   serverEnvironment,
 } from "../state/server";
-import { threadEnvironment } from "../state/threads";
+import { threadEnvironment, useThreadFamily } from "../state/threads";
 import { resolveProviderSkillsForCwd } from "@t3tools/client-runtime/providerSkills";
 import { vcsEnvironment } from "../state/vcs";
 import { sourceControlEnvironment } from "../state/sourceControl";
@@ -1174,6 +1175,14 @@ export default function ChatView(props: ChatViewProps) {
   });
   const serverThreadProjection = useQuietThreadProjection(routeThreadDetailRef);
   const serverProjection = serverThreadProjection?.projection ?? null;
+  // Subagent rows, an open child's own row and its ancestors come from the family when the shell
+  // leaves idle children out. Every source agrees on the root, so the key never flips.
+  useThreadFamily(
+    routeKind === "server" ? environmentId : null,
+    serverThreadShell?.lineage.rootThreadId ??
+      serverProjection?.thread.lineage.rootThreadId ??
+      null,
+  );
   // Only the shell-less fallback needs these; with a shell, the shell carries them.
   const fallbackDetailRef = serverThreadShell === null ? routeThreadDetailRef : null;
   const fallbackUpdatedAt = useThreadUpdatedAt(fallbackDetailRef);
@@ -3831,7 +3840,7 @@ export default function ChatView(props: ChatViewProps) {
   const openFileSurfaceStable = useStableCallback(openFileSurface);
   // The thread's own change request, placed against the project it belongs to. Without a
   // project there is nothing to resolve it against, so the caller falls back to the browser.
-  const activeProjectRepository = sourceControlRepositorySelector(
+  const activeProjectRepository = sourceControlClients.repositorySelector(
     activeProject?.repositoryIdentity,
   );
   const {
@@ -7820,23 +7829,53 @@ export default function ChatView(props: ChatViewProps) {
   const sendPreviewAnnotationStable = useStableCallback(sendPreviewAnnotation);
   const onComposerResumeStable = useStableCallback(onResume);
   const onComposerCompactContextStable = useStableCallback(onCompactContext);
+  // Read from the projection the footer renders, so the scroll below sees the new message.
+  const pendingGuestMessageIds =
+    serverProjection?.thread.guestShare?.messages.flatMap((message) =>
+      message.status === "pending" ? [message.id] : [],
+    ) ?? [];
+  const pendingGuestMessageCount = pendingGuestMessageIds.length;
+  const pendingGuestMessageKey = pendingGuestMessageIds.join(",");
+  const previousPendingGuestMessagesRef = useRef({
+    threadKey: routeThreadKey,
+    key: pendingGuestMessageKey,
+  });
+  useEffect(() => {
+    const previous = previousPendingGuestMessagesRef.current;
+    previousPendingGuestMessagesRef.current = {
+      threadKey: routeThreadKey,
+      key: pendingGuestMessageKey,
+    };
+    // Opening another thread is not a new message; its own scroll position wins.
+    if (previous.threadKey !== routeThreadKey) return;
+    // Pending guest messages sit in the list footer, which the list does not follow on its own.
+    // The follow flag reflects the owner's position before the footer grew; a live measure may not.
+    // Any new id counts, even when another one was resolved in the same update.
+    const previousIds = new Set(previous.key.split(","));
+    const hasNewMessage = pendingGuestMessageKey
+      .split(",")
+      .some((id) => id !== "" && !previousIds.has(id));
+    if (hasNewMessage && timelineLiveFollowEnabled) scrollToEnd(true);
+  }, [routeThreadKey, pendingGuestMessageKey, timelineLiveFollowEnabled, scrollToEnd]);
   const queuedRunsControl =
     isServerThread && activeThread ? (
-      <QueuedRunsControl
-        ref={queuedRunsControlRef}
-        steerShortcutLabel={shortcutLabelForCommand(keybindings, "thread.steerQueuedMessage", {
-          context: { terminalFocus: false },
-        })}
-        editShortcutLabel={shortcutLabelForCommand(keybindings, "thread.editQueuedMessage", {
-          context: { composerFocus: true },
-        })}
-        environmentId={activeThread.environmentId}
-        threadId={activeThread.id}
-        optimisticMessages={optimisticUserMessages}
-        editingRunId={queuedRunEdit.editingRunId}
-        onEditQueuedRun={queuedRunEdit.beginEdit}
-        onCancelEdit={queuedRunEdit.cancelEdit}
-      />
+      <>
+        <QueuedRunsControl
+          ref={queuedRunsControlRef}
+          steerShortcutLabel={shortcutLabelForCommand(keybindings, "thread.steerQueuedMessage", {
+            context: { terminalFocus: false },
+          })}
+          editShortcutLabel={shortcutLabelForCommand(keybindings, "thread.editQueuedMessage", {
+            context: { composerFocus: true },
+          })}
+          environmentId={activeThread.environmentId}
+          threadId={activeThread.id}
+          optimisticMessages={optimisticUserMessages}
+          editingRunId={queuedRunEdit.editingRunId}
+          onEditQueuedRun={queuedRunEdit.beginEdit}
+          onCancelEdit={queuedRunEdit.cancelEdit}
+        />
+      </>
     ) : null;
   // One-shot: the resend "Work locally" queued fires once, then the marker clears.
   const resendAfterWorkLocally = () => {
@@ -8242,18 +8281,28 @@ export default function ChatView(props: ChatViewProps) {
                 {...(onOpenWorktreeSetupTerminal ? { onOpenWorktreeSetupTerminal } : {})}
                 isPreparingWorktree={!paintOnlyDisplayedTimeline && isPreparingWorktree}
                 footer={
-                  paintOnlyDisplayedTimeline ? null : pendingHandoff === null ? (
-                    threadStatusLine
-                  ) : (
+                  paintOnlyDisplayedTimeline ||
+                  (pendingHandoff === null &&
+                    pendingGuestMessageCount === 0 &&
+                    threadStatusLine === null) ? null : (
                     <>
-                      <div className="chat-content-lane">
-                        <HandoffRow
-                          environmentId={environmentId}
-                          endpoints={pendingHandoff}
-                          providers={providerStatuses}
-                          pending
+                      {pendingHandoff === null ? null : (
+                        <div className="chat-content-lane">
+                          <HandoffRow
+                            environmentId={environmentId}
+                            endpoints={pendingHandoff}
+                            providers={providerStatuses}
+                            pending
+                          />
+                        </div>
+                      )}
+                      {pendingGuestMessageCount > 0 && isServerThread && activeThread ? (
+                        <GuestPendingMessages
+                          threadRef={scopeThreadRef(activeThread.environmentId, activeThread.id)}
+                          onImageExpand={onExpandTimelineImageStable}
+                          onFileOpen={openFileAttachmentStable}
                         />
-                      </div>
+                      ) : null}
                       {threadStatusLine}
                     </>
                   )
