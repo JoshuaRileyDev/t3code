@@ -583,7 +583,7 @@ export class QrSegment {
     if (!QrSegment.isNumeric(digits))
       throw new RangeError("String contains non-numeric characters");
     let bb: Array<bit> = [];
-    for (let i = 0; i < digits.length;) {
+    for (let i = 0; i < digits.length; ) {
       const n: int = Math.min(digits.length - i, 3);
       appendBits(parseInt(digits.substring(i, i + n), 10), n * 3 + 1, bb);
       i += n;
@@ -638,8 +638,7 @@ export class QrSegment {
   public readonly numChars: int;
   private readonly bitData: Array<bit>;
 
-  // The character count (numChars) must agree with the mode and the bit buffer length,
-  // but the constraint isn't checked.
+  // numChars must match the mode and bit-buffer length; not checked.
   public constructor(
     mode: QrSegmentMode,
 

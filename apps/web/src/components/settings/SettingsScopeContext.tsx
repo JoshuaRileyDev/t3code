@@ -18,7 +18,6 @@ type ProjectFileMember = readonly [
   physicalProjectKey: string,
 ];
 
-// Keyed by the members' identifying fields so each render reads the same atom.
 const memberProjectFilesAtom = Atom.family((membersKey: string) => {
   const members = JSON.parse(membersKey) as ReadonlyArray<ProjectFileMember>;
   return Atom.make((get) => {
@@ -47,11 +46,13 @@ function useMemberProjectFiles(scope: ReturnType<typeof resolveSettingsScope>) {
   return useAtomValue(
     memberProjectFilesAtom(
       JSON.stringify(
-        members.map((member): ProjectFileMember => [
-          member.environmentId,
-          member.workspaceRoot,
-          member.physicalProjectKey,
-        ]),
+        members.map(
+          (member): ProjectFileMember => [
+            member.environmentId,
+            member.workspaceRoot,
+            member.physicalProjectKey,
+          ],
+        ),
       ),
     ),
   );

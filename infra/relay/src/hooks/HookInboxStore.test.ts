@@ -12,18 +12,21 @@ import * as HookInboxStore from "./HookInboxStore.ts";
 const BASE_URL = "https://env.example.test/";
 
 const hook = (id: string, overrides: Partial<HookInboxStore.HeldHook> = {}) =>
-  Effect.map(Clock.currentTimeMillis, (now): HookInboxStore.HeldHook => ({
-    id,
-    receivedAt: DateTime.formatIso(DateTime.makeUnsafe(now)),
-    method: "POST",
-    rawHookId: "hook-1",
-    hookKey: "hook-1",
-    rawToken: "tok%2Fen",
-    query: "a=1",
-    headers: { "content-type": "application/json", "x-sig": "s" },
-    body: new Uint8Array([0, 255, 10]),
-    ...overrides,
-  }));
+  Effect.map(
+    Clock.currentTimeMillis,
+    (now): HookInboxStore.HeldHook => ({
+      id,
+      receivedAt: DateTime.formatIso(DateTime.makeUnsafe(now)),
+      method: "POST",
+      rawHookId: "hook-1",
+      hookKey: "hook-1",
+      rawToken: "tok%2Fen",
+      query: "a=1",
+      headers: { "content-type": "application/json", "x-sig": "s" },
+      body: new Uint8Array([0, 255, 10]),
+      ...overrides,
+    }),
+  );
 
 const deliverer = (outcome: (hook: HookInboxStore.HeldHook) => HookInboxStore.DeliveryOutcome) => {
   const sent: Array<{ readonly baseUrl: string; readonly hook: HookInboxStore.HeldHook }> = [];
@@ -68,7 +71,6 @@ describe("HookInboxStore", () => {
           yield* Deferred.succeed(released, undefined);
           const nextAt = yield* Fiber.join(run);
           expect(sent).toEqual(["first"]);
-          // The alarm must not be rescheduled, even if the in-flight send failed.
           expect(nextAt).toBeNull();
           const sql = yield* SqlClient.SqlClient;
           expect(yield* sql`SELECT id FROM held_hooks`).toEqual([]);

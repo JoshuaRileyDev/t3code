@@ -123,7 +123,7 @@ function headline(host: string, located: Located, failure: ConnectionAttemptErro
         ? "T3 Connect did not accept this device's sign-in"
         : "This device can't reach T3 Connect";
     case "tunnel":
-      // The relay already reached the host when this device fails on its own (#17629).
+      // The relay already reached the host when this device fails on its own.
       return failure?.reason === "network" ||
         failure?.reason === "transport" ||
         failure?.reason === "timeout"
@@ -297,11 +297,13 @@ export function presentConnectionDiagnosis(
     (failure?.via ?? input.via) === "relay";
   const order: ReadonlyArray<ConnectionHop> = HOP_ORDER[relayPath ? "relay" : "direct"];
   const failedIndex = order.indexOf(located.hop);
-  const hops = order.map((hop, index): ConnectionDiagnosisHop => ({
-    hop,
-    label: hopLabel(hop, host),
-    result: index < failedIndex ? "ok" : index === failedIndex ? "failed" : "unchecked",
-  }));
+  const hops = order.map(
+    (hop, index): ConnectionDiagnosisHop => ({
+      hop,
+      label: hopLabel(hop, host),
+      result: index < failedIndex ? "ok" : index === failedIndex ? "failed" : "unchecked",
+    }),
+  );
 
   // The relay health check only explains the state when no attempt has failed yet.
   const httpStatus = failure !== null ? failure.httpStatus : input.relayStatus?.endpointStatus;

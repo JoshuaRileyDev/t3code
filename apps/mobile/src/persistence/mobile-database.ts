@@ -319,8 +319,7 @@ const makeAvailable = Effect.gen(function* () {
       (environmentId, kind, cacheKey, schemaVersion, payload) =>
         Effect.tryPromise({
           try: async () => {
-            // Diffs can be large. Keep the offline PR cache within 32 MiB and 256
-            // responses per environment, and don't let one huge diff evict it all.
+            // Bound offline PR caches to 32 MiB and 256 responses per environment; reject huge diffs that would evict everything.
             if (
               kind === "pull-request" &&
               new TextEncoder().encode(payload).length > 4 * 1024 * 1024
@@ -417,13 +416,14 @@ const makeAvailable = Effect.gen(function* () {
     }).pipe(
       Effect.flatMap(Schema.decodeUnknownEffect(ClientCacheSummaryRows)),
       Effect.mapError(databaseError("inspect-caches")),
-      Effect.map((rows): ReadonlyArray<ClientCacheSummaryRow> =>
-        rows.map((row) => ({
-          environmentId: row.environmentId as EnvironmentId,
-          kind: row.kind,
-          recordCount: row.recordCount,
-          payloadBytes: row.payloadBytes,
-        })),
+      Effect.map(
+        (rows): ReadonlyArray<ClientCacheSummaryRow> =>
+          rows.map((row) => ({
+            environmentId: row.environmentId as EnvironmentId,
+            kind: row.kind,
+            recordCount: row.recordCount,
+            payloadBytes: row.payloadBytes,
+          })),
       ),
     ),
     loadPreferencesJson: Effect.tryPromise({

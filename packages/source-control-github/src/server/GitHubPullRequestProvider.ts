@@ -90,15 +90,11 @@ export function gitHubViewerPermissions(
           ] as const)
         : []),
       ...(access.canUpdate ? (["ready", "draft", "close", "reopen"] as const) : []),
-      // Whether this viewer may update the branch is GitHub's own answer, read with the
-      // comparison; without it the action is offered to nobody rather than to everybody.
       ...(access.canUpdateBranch === true ? (["update-branch"] as const) : []),
     ],
     comment: true,
     resolve: access.canWrite || access.didAuthor,
-    // Anyone may review a pull request they can see, except their own: GitHub refuses an author's
-    // approval and their request for changes ("Can not approve your own pull request"), and
-    // leaves them commenting, which is what an author has to say about their own change anyway.
+    // Authors may comment on their own PRs, but GitHub rejects their approvals and change requests.
     verdicts: access.didAuthor ? (["comment"] as const) : CAPABILITIES.review.verdicts,
     requestReviewers: access.canWrite,
     ...(access.canUpdateBranch === true ? { updateMethods: CAPABILITIES.updateMethods } : {}),
@@ -130,10 +126,6 @@ function gitHubProviderFailure(
   }
 }
 
-/**
- * `gh pr view --json` reports no avatar for anyone, so the ones the GraphQL read collected are
- * applied here by login.
- */
 function withAvatar(
   actor: PullRequestActor | null,
   avatarsByLogin: ReadonlyMap<string, string>,
@@ -184,10 +176,7 @@ function withWorkflowApprovals(
   ];
 }
 
-/**
- * Null for anything that is not a plain user login: an app posts as `dependabot[bot]`, which
- * names no page, and a guessed URL that 404s is worse than the initials it would replace.
- */
+/** App logins have no profile page; guessed avatar URLs 404. */
 export function loginAvatarUrl(login: string, host: string): string | null {
   return /^[a-z0-9][a-z0-9-]{0,38}$/iu.test(login) ? `https://${host}/${login}.png?size=80` : null;
 }
@@ -501,7 +490,6 @@ export const make = Effect.gen(function* () {
       Effect.all(
         [
           cli.getPullRequestActivity(input),
-          // Line comments live on review threads, which `gh pr view --json` cannot reach.
           cli.listReviewThreadComments(input).pipe(
             Effect.orElseSucceed(() => ({
               comments: [],
@@ -516,10 +504,6 @@ export const make = Effect.gen(function* () {
               reviewers: [],
               avatarsByLogin: new Map<string, string>(),
               botLogins: new Set<string>(),
-              commitStats: new Map<
-                string,
-                { readonly additions: number; readonly deletions: number }
-              >(),
               commits: [],
               viewer: { canUpdate: true, didAuthor: false },
             })),
