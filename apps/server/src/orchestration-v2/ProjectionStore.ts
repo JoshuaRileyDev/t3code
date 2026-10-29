@@ -7127,7 +7127,6 @@ export const layerMemory: Layer.Layer<ProjectionStoreV2> = Layer.effect(
             ),
           ),
         ),
-      getOpenRemoteDelegatedTasks: Effect.succeed([]),
       getThreadsWithPullRequests: (threadId) =>
         Ref.get(replayState).pipe(
           Effect.map((state) =>
@@ -7326,10 +7325,6 @@ export const layerMemory: Layer.Layer<ProjectionStoreV2> = Layer.effect(
               filter?.runIds === undefined
                 ? projection.runs
                 : projection.runs.filter((row) => filter.runIds!.includes(row.id)),
-            subagents:
-              filter?.subagentIds === undefined
-                ? projection.subagents
-                : projection.subagents.filter((row) => filter.subagentIds!.includes(row.id)),
             turnItems: projection.turnItems.filter(
               (row) =>
                 (filter?.turnItemRunIds === undefined ||
@@ -7608,13 +7603,14 @@ export const layerMemory: Layer.Layer<ProjectionStoreV2> = Layer.effect(
         return (
           projection.thread.archivedAt === null &&
           projection.thread.deletedAt === null &&
-          projection.runs.some((run) => run.status === "queued" && run.queueHeld !== true) &&
+          projection.runs.some((run) => run.status === "queued") &&
           !projection.runs.some(
             (run) =>
               run.status === "preparing" ||
               run.status === "starting" ||
               run.status === "running" ||
-              run.status === "waiting",
+              run.status === "waiting" ||
+              (run.status === "queued" && run.queueHeld === true),
           )
         );
       }),
