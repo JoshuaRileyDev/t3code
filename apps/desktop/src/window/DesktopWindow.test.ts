@@ -472,25 +472,25 @@ describe("DesktopWindow", () => {
     );
   });
 
-  it("recognizes only same-origin renderer navigations", () => {
-    assert.isTrue(
-      DesktopWindow.isSameOriginRendererNavigation({
-        applicationUrl: "t3code://app/",
-        navigationUrl: "t3code://app/settings/connections",
-      }),
-    );
-    assert.isFalse(
-      DesktopWindow.isSameOriginRendererNavigation({
-        applicationUrl: "t3code://app/",
-        navigationUrl: "https://accounts.microsoft.com/oauth",
-      }),
-    );
-    assert.isFalse(
-      DesktopWindow.isSameOriginRendererNavigation({
-        applicationUrl: "t3code://app/",
-        navigationUrl: "not a url",
-      }),
-    );
+  it("rejects renderer navigations whose origin only serializes as null", () => {
+    for (const applicationUrl of ["t3code://app/", "t3code-dev://app/"]) {
+      assert.isTrue(
+        DesktopWindow.isSameOriginRendererNavigation({
+          applicationUrl,
+          navigationUrl: `${applicationUrl}threads?id=1#latest`,
+        }),
+        applicationUrl,
+      );
+    }
+    for (const navigationUrl of [
+      "t3code://other/", "t3code://app.example/", "t3code://app:8080/",
+      "t3code://user@other/", "t3code:app", "t3code-dev://app/", "file:///etc/passwd",
+      "data:text/html,<p>hi</p>", "javascript:alert(1)", "about:blank", "blob:t3code://app/0b5e2c4a",
+      "https://accounts.microsoft.com/oauth", "not a url",
+    ]) {
+      assert.isFalse(DesktopWindow.isSameOriginRendererNavigation({ applicationUrl: "t3code://app/", navigationUrl }), navigationUrl);
+    }
+    assert.isFalse(DesktopWindow.isSameOriginRendererNavigation({ applicationUrl: "data:text/html,app", navigationUrl: "data:text/html,other" }));
   });
 
   it.effect("does not open a development window until the backend is ready", () =>
@@ -499,18 +499,11 @@ describe("DesktopWindow", () => {
       const createCount = yield* Ref.make(0);
       const mainWindow = yield* Ref.make<Option.Option<Electron.BrowserWindow>>(Option.none());
       const createdWindowOptions: Electron.BrowserWindowConstructorOptions[] = [];
-      const layer = layerTest({
-        window: fakeWindow.window,
-        createCount,
-        mainWindow,
-        createdWindowOptions,
-      });
-
+      const layer = layerTest({ window: fakeWindow.window, createCount, mainWindow, createdWindowOptions });
       yield* Effect.gen(function* () {
         const desktopWindow = yield* DesktopWindow.DesktopWindow;
         yield* desktopWindow.activate;
         assert.equal(yield* Ref.get(createCount), 0);
-
         yield* desktopWindow.handleBackendReady(new URL("http://127.0.0.1:3773"));
         assert.equal(yield* Ref.get(createCount), 1);
         assert.equal(createdWindowOptions[0]?.width, 1100);
@@ -1027,6 +1020,17 @@ describe("DesktopWindow", () => {
         if (!willNavigate) {
           return yield* Effect.die("will-navigate listener was not registered");
         }
+        for (const [url, expectedPrevented] of [
+          ["t3code-dev://app/threads?id=1#latest", false],
+          ["t3code-dev://other/", true],
+          ["t3code://app/", true],
+        ] as const) {
+          const preventDefault = vi.fn();
+          willNavigate({ preventDefault }, url);
+          assert.equal(preventDefault.mock.calls.length, expectedPrevented ? 1 : 0, url);
+        }
+        assert.deepEqual(openedExternalUrls, []);
+
         let prevented = false;
         willNavigate(
           {
