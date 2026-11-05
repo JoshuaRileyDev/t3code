@@ -44,10 +44,9 @@ const crashLogAtom = Atom.make(
       }),
     ),
     Effect.catch((error) =>
-      Effect.sync((): CrashLogState => {
-        console.warn("[diagnostics] could not read the expo-updates log", error);
-        return { status: "unavailable" };
-      }),
+      Effect.logWarning("[diagnostics] could not read the expo-updates log", error).pipe(
+        Effect.as<CrashLogState>({ status: "unavailable" }),
+      ),
     ),
   ),
 ).pipe(Atom.withLabel("mobile:diagnostics-crash-log"));
