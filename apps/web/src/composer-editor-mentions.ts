@@ -1,8 +1,10 @@
+import { collectComposerModelMentions } from "@t3tools/client-runtime/composer-model-mentions";
 import type { AssistantCitation } from "@t3tools/contracts";
 import { collectAssistantCitations } from "@t3tools/shared/assistantCitations";
 import { collectComposerContextReferences } from "@t3tools/shared/composerContextReferences";
 import {
   collectComposerInlineTokens,
+  composerMathRanges,
   type ComposerInlineToken,
 } from "@t3tools/shared/composerInlineTokens";
 import {
@@ -23,6 +25,12 @@ export type ComposerPromptSegment =
   | {
       type: "skill";
       name: string;
+      source: string;
+    }
+  | {
+      type: "model";
+      instanceId: string;
+      model: string;
       source: string;
     }
   | {
@@ -79,8 +87,27 @@ function forEachMentionMatch(
   });
 }
 
+// Like `$skill`, a typed reference waits for whitespace so `gpt-6` cannot chip while typing `gpt-6.1`.
+function collectModelTokens(text: string, inlineTokens: ReadonlyArray<ComposerInlineToken>) {
+  const mentions = collectComposerModelMentions(text).filter((mention) =>
+    /\s/.test(text[mention.end] ?? ""),
+  );
+  if (mentions.length === 0) return [];
+  const taken = [...inlineTokens, ...composerMathRanges(text)];
+  return mentions
+    .filter(
+      (mention) => !taken.some((range) => mention.start < range.end && mention.end > range.start),
+    )
+    .map((mention) => ({ ...mention, type: "model" as const }));
+}
+
 export function collectComposerPromptInlineTokens(text: string) {
-  const tokens = collectComposerInlineTokens(text);
+  const inlineTokens = collectComposerInlineTokens(text);
+  const models = collectModelTokens(text, inlineTokens);
+  const tokens =
+    models.length === 0
+      ? inlineTokens
+      : [...inlineTokens, ...models].sort((left, right) => left.start - right.start);
   const citations = collectAssistantCitations(text);
   const references = collectComposerContextReferences(text);
   if (citations.length === 0 && references.length === 0) return tokens;
@@ -142,6 +169,13 @@ function splitPromptTextIntoComposerSegmentsWithSlashCommands(
       segments.push({
         type: "slash-command",
         name: match.name,
+      });
+    } else if (match.type === "model") {
+      segments.push({
+        type: "model",
+        instanceId: match.instanceId,
+        model: match.model,
+        source: match.source,
       });
     } else {
       segments.push({ type: "skill", name: match.value, source: match.source });
